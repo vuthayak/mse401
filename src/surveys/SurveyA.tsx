@@ -2,7 +2,9 @@ import { useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { JsonPreview } from '../components/JsonPreview';
 import { ProductHeader } from '../components/ProductHeader';
+import { SaveStatus } from '../components/SaveStatus';
 import { buildSurveyPayload } from '../lib/buildPayload';
+import { persistSurveyResponse, type PersistOutcome } from '../lib/persistSurvey';
 import { resetSession } from '../lib/session';
 import {
   AXIS_CONFIGS,
@@ -22,6 +24,8 @@ export function SurveyA() {
   const [step, setStep] = useState<WizardStep>('axis');
   const [matrix, setMatrix] = useState<PartialSentimentMatrix>({});
   const [payload, setPayload] = useState<SurveyPayload | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveOutcome, setSaveOutcome] = useState<PersistOutcome | null>(null);
 
   const handleAxisSelect = (index: number, signal: string) => {
     const config = AXIS_CONFIGS[index];
@@ -33,7 +37,7 @@ export function SurveyA() {
     }
   };
 
-  const handleIntent = (decision: ConversionDecision) => {
+  const handleIntent = async (decision: ConversionDecision) => {
     if (
       !matrix.size_fit ||
       !matrix.colorway ||
@@ -53,7 +57,11 @@ export function SurveyA() {
       },
       decision,
     );
-    console.log('survey_payload', result);
+    setSaving(true);
+    setSaveOutcome(null);
+    const outcome = await persistSurveyResponse('A', result);
+    setSaveOutcome(outcome);
+    setSaving(false);
     setPayload(result);
     setStep('result');
   };
@@ -62,6 +70,7 @@ export function SurveyA() {
     resetSession();
     setMatrix({});
     setPayload(null);
+    setSaveOutcome(null);
     setAxisIndex(0);
     setStep('axis');
   };
@@ -71,6 +80,7 @@ export function SurveyA() {
       <div className="app-shell" style={styles.page}>
         <main style={styles.main}>
           <ProductHeader product={PRODUCT_BLAZER} variant="clinical" />
+          <SaveStatus outcome={saveOutcome} />
           <JsonPreview payload={payload} />
           <button type="button" className="choice-btn" style={styles.resetBtn} onClick={handleStartOver}>
             Start Over
@@ -132,17 +142,19 @@ export function SurveyA() {
                 type="button"
                 className="choice-btn"
                 style={styles.choiceBtn}
+                disabled={saving}
                 onClick={() => handleIntent('KEEP_AND_WEAR')}
               >
-                {INTENT_LABEL_PURCHASE}
+                {saving ? 'Saving…' : INTENT_LABEL_PURCHASE}
               </button>
               <button
                 type="button"
                 className="choice-btn"
                 style={styles.choiceBtn}
+                disabled={saving}
                 onClick={() => handleIntent('LEAVE_AND_SWAP')}
               >
-                {INTENT_LABEL_LEAVE}
+                {saving ? 'Saving…' : INTENT_LABEL_LEAVE}
               </button>
             </div>
           </div>

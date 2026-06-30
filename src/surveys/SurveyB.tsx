@@ -2,7 +2,9 @@ import { useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { JsonPreview } from '../components/JsonPreview';
 import { ProductHeader } from '../components/ProductHeader';
+import { SaveStatus } from '../components/SaveStatus';
 import { buildSurveyPayload } from '../lib/buildPayload';
+import { persistSurveyResponse, type PersistOutcome } from '../lib/persistSurvey';
 import { resetSession } from '../lib/session';
 import {
   AXIS_CONFIGS,
@@ -20,6 +22,8 @@ export function SurveyB() {
   const [matrix, setMatrix] = useState<PartialSentimentMatrix>({});
   const [showIntent, setShowIntent] = useState(false);
   const [payload, setPayload] = useState<SurveyPayload | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveOutcome, setSaveOutcome] = useState<PersistOutcome | null>(null);
 
   const matrixComplete = isMatrixComplete(matrix);
 
@@ -30,7 +34,7 @@ export function SurveyB() {
     setMatrix((prev) => ({ ...prev, [key]: signal }));
   };
 
-  const handleIntent = (decision: ConversionDecision) => {
+  const handleIntent = async (decision: ConversionDecision) => {
     if (!isMatrixComplete(matrix)) return;
     const result = buildSurveyPayload(
       PRODUCT_DRESS,
@@ -38,7 +42,11 @@ export function SurveyB() {
       matrix,
       decision,
     );
-    console.log('survey_payload', result);
+    setSaving(true);
+    setSaveOutcome(null);
+    const outcome = await persistSurveyResponse('B', result);
+    setSaveOutcome(outcome);
+    setSaving(false);
     setPayload(result);
     setShowIntent(false);
   };
@@ -47,6 +55,7 @@ export function SurveyB() {
     resetSession();
     setMatrix({});
     setPayload(null);
+    setSaveOutcome(null);
     setShowIntent(false);
   };
 
@@ -55,6 +64,7 @@ export function SurveyB() {
       <div className="app-shell" style={styles.page}>
         <main style={styles.main}>
           <ProductHeader product={PRODUCT_DRESS} variant="warm" />
+          <SaveStatus outcome={saveOutcome} />
           <JsonPreview payload={payload} />
           <button type="button" className="choice-btn" style={styles.tryAgainBtn} onClick={handleTryAgain}>
             Try Again
@@ -151,24 +161,27 @@ export function SurveyB() {
                   type="button"
                   className="choice-btn"
                   style={styles.intentTile}
+                  disabled={saving}
                   onClick={() => handleIntent('KEEP_AND_WEAR')}
                 >
                   <span style={styles.tileIcon}>✓</span>
-                  <span>{INTENT_LABEL_PURCHASE}</span>
+                  <span>{saving ? 'Saving…' : INTENT_LABEL_PURCHASE}</span>
                 </button>
                 <button
                   type="button"
                   className="choice-btn"
                   style={styles.intentTile}
+                  disabled={saving}
                   onClick={() => handleIntent('LEAVE_AND_SWAP')}
                 >
                   <span style={styles.tileIcon}>↻</span>
-                  <span>{INTENT_LABEL_LEAVE}</span>
+                  <span>{saving ? 'Saving…' : INTENT_LABEL_LEAVE}</span>
                 </button>
               </div>
               <button
                 type="button"
                 style={styles.cancelBtn}
+                disabled={saving}
                 onClick={() => setShowIntent(false)}
               >
                 Back to ratings

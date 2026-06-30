@@ -13,10 +13,11 @@ Both surveys follow the flow and data schema defined in [`Survey Specification S
 | `/survey-b` | Grid flow | 2×2 matrix + bottom sheet intent step | Relaxed Linen Midi Dress (`STALL_07`) |
 
 On completion, each survey:
-1. Shows the serialized JSON payload on screen
-2. Logs the same payload to the browser console (`survey_payload`)
+1. Saves the full JSON payload to **Supabase** (when configured)
+2. Shows the serialized JSON on screen
+3. Logs the same payload to the browser console (`survey_payload`)
 
-No backend, database, or personal data collection is required for this prototype.
+No personal data is collected — only anonymous session tokens and product feedback.
 
 ## Prerequisites
 
@@ -85,6 +86,52 @@ This app is a static web app designed to be hosted on **GitHub Pages**.
 
 > If your repo is not named `mse401`, change the `base` path in `vite.config.ts` to `/<your-repo-name>/`.
 
+## Supabase setup
+
+Survey responses are stored in Supabase when credentials are configured.
+
+### 1. Create the database table
+
+In Supabase → **SQL Editor**, run the script in [`supabase/schema.sql`](supabase/schema.sql).
+
+This creates a `survey_responses` table and allows **anonymous inserts only** (no public reads).
+
+### 2. Get your API keys
+
+Supabase → **Project Settings** → **API**:
+
+- **Project URL** → `VITE_SUPABASE_URL`
+- **anon public** key → `VITE_SUPABASE_ANON_KEY`
+
+### 3. Local development
+
+```bash
+cp .env.example .env.local
+```
+
+Fill in your values, then:
+
+```bash
+npm run dev
+```
+
+Without `.env.local`, surveys still work but only log to the console.
+
+### 4. GitHub Pages (production)
+
+Add repository secrets (**Settings** → **Secrets and variables** → **Actions**):
+
+| Secret | Value |
+|--------|--------|
+| `VITE_SUPABASE_URL` | Your Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Your anon public key |
+
+Push to `main` to redeploy with database support baked into the build.
+
+### Viewing responses
+
+Supabase → **Table Editor** → `survey_responses`. Each row stores indexed fields plus the full `payload` JSON.
+
 ## iPad / kiosk testing tips
 
 - Use Safari on iPad in landscape or portrait — layouts use `100dvh` and safe-area padding.
@@ -122,7 +169,9 @@ src/
 │   └── ProductHeader.tsx
 ├── lib/
 │   ├── buildPayload.ts     # JSON serializer + mock routing
+│   ├── persistSurvey.ts    # Supabase insert
 │   ├── session.ts          # Ephemeral anonymous session UUID
+│   ├── supabase.ts         # Supabase client
 │   └── valence.ts          # POSITIVE / NEGATIVE mapping
 ├── surveys/
 │   ├── SurveyA.tsx         # Wizard variant
@@ -159,6 +208,7 @@ zip -r mse401-fitting-room-surveys.zip mse401 \
 |-------|-----|
 | `npm install` fails | Confirm Node.js 18+; delete `node_modules` and retry |
 | Port 5173 in use | Vite will pick the next free port, or stop the other process |
+| Could not save to database | Run `supabase/schema.sql`; confirm anon RLS insert policy; check browser console |
 | Blank page on GitHub Pages | Confirm repo name matches `base` in `vite.config.ts` (default: `/mse401/`) |
 | Blank page after local build | Run `npm run preview` and open the URL shown (includes `/mse401/` in production) |
 | iPad can't reach dev server | Use `npm run dev -- --host` and allow the port through your firewall |
@@ -172,3 +222,4 @@ This prototype uses an in-memory anonymous session UUID only. It does not collec
 - React 19 + TypeScript
 - Vite 7
 - React Router 7
+- Supabase (Postgres)
