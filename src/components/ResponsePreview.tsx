@@ -1,15 +1,15 @@
 import type { CSSProperties } from 'react';
-import type { SurveyPayload } from '../types/survey';
+import type { SurveyAResponse, SurveyBResponse } from '../types/survey';
 
-interface JsonPreviewProps {
-  payload: SurveyPayload;
+interface ResponsePreviewProps {
+  record: SurveyAResponse | SurveyBResponse;
 }
 
-export function JsonPreview({ payload }: JsonPreviewProps) {
+export function ResponsePreview({ record }: ResponsePreviewProps) {
   return (
     <div style={styles.wrapper}>
-      <h2 style={styles.heading}>Survey Response (JSON)</h2>
-      <pre style={styles.pre}>{JSON.stringify(payload, null, 2)}</pre>
+      <h2 style={styles.heading}>Survey Response</h2>
+      <pre style={styles.pre}>{JSON.stringify(record, null, 2)}</pre>
     </div>
   );
 }

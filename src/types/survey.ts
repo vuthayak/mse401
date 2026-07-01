@@ -1,140 +1,83 @@
-export type Valence = 'POSITIVE' | 'NEGATIVE';
-
-export type SizeFitSignal = 'TOO_SMALL' | 'PERFECT' | 'TOO_LARGE';
-export type ColorwaySignal = 'DISLIKE_SHADE' | 'LOVE_COLOR';
-export type CutSilhouetteSignal = 'UNCOMFORTABLE_PROPORTIONS' | 'FLATTERING_CUT';
-export type MaterialSignal = 'HARSH_FABRIC' | 'PREMIUM_TEXTURE';
-
 export type ConversionDecision = 'KEEP_AND_WEAR' | 'LEAVE_AND_SWAP';
 
-export interface AxisSelection<T extends string> {
-  captured_signal: T;
-  valence: Valence;
+export type ScaleRating = 1 | 2 | 3 | 4 | 5;
+
+export type AttributeKey = 'fabric' | 'fit' | 'colour' | 'price';
+
+export interface SurveyItem {
+  id: string;
+  title: string;
+  tagline: string;
+  imageUrl?: string;
 }
 
-export interface SentimentMatrix {
-  size_fit: AxisSelection<SizeFitSignal>;
-  colorway: AxisSelection<ColorwaySignal>;
-  cut_silhouette: AxisSelection<CutSilhouetteSignal>;
-  material_property: AxisSelection<MaterialSignal>;
-}
+export const SURVEY_ITEMS: SurveyItem[] = [
+  { id: 'item-1', title: 'Item 1', tagline: 'Placeholder tagline for item one.' },
+  { id: 'item-2', title: 'Item 2', tagline: 'Placeholder tagline for item two.' },
+  { id: 'item-3', title: 'Item 3', tagline: 'Placeholder tagline for item three.' },
+  { id: 'item-4', title: 'Item 4', tagline: 'Placeholder tagline for item four.' },
+  { id: 'item-5', title: 'Item 5', tagline: 'Placeholder tagline for item five.' },
+];
 
-export interface ProductContext {
-  scanned_sku: string;
-  style_group_id: string;
-  current_size: string;
-  current_color_code: string;
-  categorical_tags: string[];
-  display_name: string;
-  display_color: string;
-}
-
-export interface SurveyPayload {
-  session_metadata: {
-    session_token: string;
-    fitting_room_id: string;
-    timestamp_utc: string;
-  };
-  active_product_context: {
-    scanned_sku: string;
-    style_group_id: string;
-    current_size: string;
-    current_color_code: string;
-    categorical_tags: string[];
-  };
-  step_1_granular_sentiment_matrix: SentimentMatrix;
-  step_2_universal_conversion_intent: {
-    user_decision: ConversionDecision;
-    recommender_pipeline_triggered: boolean;
-  };
-  hybrid_recommender_routing_directives: HybridRoutingDirectives | null;
-}
-
-export interface HybridRoutingDirectives {
-  stage_1_heuristic_execution: {
-    action: string;
-    parameters: {
-      target_size_operator: string | null;
-      fallback_strategy: string;
-    };
-  };
-  stage_2_llm_stylist_hybrid_override: {
-    action: string;
-    parameters: {
-      attributes_to_lock_and_match: string[];
-      attributes_to_penalize_and_mutate: string[];
-      target_recommendation_strategy: string;
-      vector_multiplier: number;
-    };
-  };
-}
-
-export interface AxisConfig<T extends string> {
-  key: keyof SentimentMatrix;
+export interface ScaleAxisConfig {
+  key: AttributeKey;
   label: string;
-  options: { label: string; signal: T }[];
+  options: { value: ScaleRating; label: string }[];
 }
 
-export const AXIS_CONFIGS: [
-  AxisConfig<SizeFitSignal>,
-  AxisConfig<ColorwaySignal>,
-  AxisConfig<CutSilhouetteSignal>,
-  AxisConfig<MaterialSignal>,
-] = [
+export const SURVEY_A_AXES: ScaleAxisConfig[] = [
   {
-    key: 'size_fit',
-    label: 'Size / Fit',
+    key: 'fabric',
+    label: 'Fabric',
     options: [
-      { label: 'Too Small', signal: 'TOO_SMALL' },
-      { label: 'Perfect', signal: 'PERFECT' },
-      { label: 'Too Large', signal: 'TOO_LARGE' },
+      { value: 1, label: 'hate it' },
+      { value: 2, label: 'dislike it' },
+      { value: 3, label: 'neutral' },
+      { value: 4, label: 'like it' },
+      { value: 5, label: 'love it' },
     ],
   },
   {
-    key: 'colorway',
-    label: 'Color',
+    key: 'fit',
+    label: 'Fit',
     options: [
-      { label: 'Dislike Shade', signal: 'DISLIKE_SHADE' },
-      { label: 'Love Color', signal: 'LOVE_COLOR' },
+      { value: 1, label: 'too tight' },
+      { value: 2, label: 'slightly tight' },
+      { value: 3, label: 'just right' },
+      { value: 4, label: 'slightly loose' },
+      { value: 5, label: 'too loose' },
     ],
   },
   {
-    key: 'cut_silhouette',
-    label: 'Cut / Silhouette',
+    key: 'colour',
+    label: 'Colour',
     options: [
-      { label: 'Uncomfortable Proportions', signal: 'UNCOMFORTABLE_PROPORTIONS' },
-      { label: 'Flattering Cut', signal: 'FLATTERING_CUT' },
+      { value: 1, label: 'hate the colour' },
+      { value: 2, label: 'dislike the colour' },
+      { value: 3, label: 'neutral' },
+      { value: 4, label: 'like the colour' },
+      { value: 5, label: 'love the colour' },
     ],
   },
   {
-    key: 'material_property',
-    label: 'Fabric / Material',
+    key: 'price',
+    label: 'Price',
     options: [
-      { label: 'Harsh Fabric', signal: 'HARSH_FABRIC' },
-      { label: 'Premium Texture', signal: 'PREMIUM_TEXTURE' },
+      { value: 1, label: 'overpriced' },
+      { value: 2, label: 'poor value' },
+      { value: 3, label: 'fair' },
+      { value: 4, label: 'good value' },
+      { value: 5, label: 'great value' },
     ],
   },
 ];
 
-export const PRODUCT_BLAZER: ProductContext = {
-  scanned_sku: 'SKU-49120-BLU-MED',
-  style_group_id: 'STYLE-49120',
-  current_size: 'M',
-  current_color_code: 'BLU',
-  categorical_tags: ['Material: 100% Linen', 'Style: Slim-Fit-Blazer'],
-  display_name: 'Slim-Fit Linen Blazer',
-  display_color: 'Blue',
-};
-
-export const PRODUCT_DRESS: ProductContext = {
-  scanned_sku: 'SKU-77204-SND-SML',
-  style_group_id: 'STYLE-77204',
-  current_size: 'S',
-  current_color_code: 'SND',
-  categorical_tags: ['Material: 100% Linen', 'Style: Relaxed-Midi-Dress'],
-  display_name: 'Relaxed Linen Midi Dress',
-  display_color: 'Sand',
-};
+export const SURVEY_B_AXES: { key: AttributeKey; label: string }[] = [
+  { key: 'fabric', label: 'Fabric' },
+  { key: 'fit', label: 'Fit' },
+  { key: 'colour', label: 'Colour' },
+  { key: 'price', label: 'Price' },
+];
 
 export const INTENT_STEM =
   'Do you plan on purchasing this item, or leave and get recommendations?';
@@ -142,23 +85,48 @@ export const INTENT_STEM =
 export const INTENT_LABEL_PURCHASE = 'I plan on purchasing';
 export const INTENT_LABEL_LEAVE = 'I plan on not purchasing, give me recommendations';
 
-export type PartialSentimentMatrix = {
-  size_fit?: SizeFitSignal;
-  colorway?: ColorwaySignal;
-  cut_silhouette?: CutSilhouetteSignal;
-  material_property?: MaterialSignal;
-};
+export type PartialScaleRatings = Partial<Record<AttributeKey, ScaleRating>>;
 
-export function isMatrixComplete(matrix: PartialSentimentMatrix): matrix is {
-  size_fit: SizeFitSignal;
-  colorway: ColorwaySignal;
-  cut_silhouette: CutSilhouetteSignal;
-  material_property: MaterialSignal;
-} {
+export type PartialBinaryRatings = Partial<Record<AttributeKey, boolean>>;
+
+export function isScaleRatingsComplete(
+  ratings: PartialScaleRatings,
+): ratings is Record<AttributeKey, ScaleRating> {
   return (
-    matrix.size_fit !== undefined &&
-    matrix.colorway !== undefined &&
-    matrix.cut_silhouette !== undefined &&
-    matrix.material_property !== undefined
+    ratings.fabric !== undefined &&
+    ratings.fit !== undefined &&
+    ratings.colour !== undefined &&
+    ratings.price !== undefined
   );
+}
+
+export function isBinaryRatingsComplete(
+  ratings: PartialBinaryRatings,
+): ratings is Record<AttributeKey, boolean> {
+  return (
+    ratings.fabric !== undefined &&
+    ratings.fit !== undefined &&
+    ratings.colour !== undefined &&
+    ratings.price !== undefined
+  );
+}
+
+export interface SurveyAResponse {
+  session_token: string;
+  selected_item: string;
+  fabric: ScaleRating;
+  fit: ScaleRating;
+  colour: ScaleRating;
+  price: ScaleRating;
+  purchase_intent: ConversionDecision;
+}
+
+export interface SurveyBResponse {
+  session_token: string;
+  selected_item: string;
+  purchase_intent: ConversionDecision;
+  fabric: boolean;
+  fit: boolean;
+  colour: boolean;
+  price: boolean;
 }

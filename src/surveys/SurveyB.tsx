@@ -1,75 +1,102 @@
-import { useState, type CSSProperties } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { JsonPreview } from '../components/JsonPreview';
+import { ItemSelection } from '../components/ItemSelection';
 import { ProductHeader } from '../components/ProductHeader';
+import { ResponsePreview } from '../components/ResponsePreview';
 import { SaveStatus } from '../components/SaveStatus';
-import { buildSurveyPayload } from '../lib/buildPayload';
-import { persistSurveyResponse, type PersistOutcome } from '../lib/persistSurvey';
-import { resetSession } from '../lib/session';
+import { persistSurveyBResponse, type PersistOutcome } from '../lib/persistSurvey';
+import { getSessionToken, resetSession } from '../lib/session';
 import {
-  AXIS_CONFIGS,
+  SURVEY_B_AXES,
   INTENT_STEM,
   INTENT_LABEL_PURCHASE,
   INTENT_LABEL_LEAVE,
-  PRODUCT_DRESS,
+  isBinaryRatingsComplete,
+  type AttributeKey,
   type ConversionDecision,
-  type PartialSentimentMatrix,
-  type SurveyPayload,
-  isMatrixComplete,
+  type PartialBinaryRatings,
+  type SurveyBResponse,
+  type SurveyItem,
 } from '../types/survey';
 
+type SurveyStep = 'items' | 'intent' | 'ratings' | 'result';
+
 export function SurveyB() {
-  const [matrix, setMatrix] = useState<PartialSentimentMatrix>({});
-  const [showIntent, setShowIntent] = useState(false);
-  const [payload, setPayload] = useState<SurveyPayload | null>(null);
+  const [step, setStep] = useState<SurveyStep>('items');
+  const [selectedItem, setSelectedItem] = useState<SurveyItem | null>(null);
+  const [purchaseIntent, setPurchaseIntent] = useState<ConversionDecision | null>(null);
+  const [ratings, setRatings] = useState<PartialBinaryRatings>({});
+  const [response, setResponse] = useState<SurveyBResponse | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveOutcome, setSaveOutcome] = useState<PersistOutcome | null>(null);
 
-  const matrixComplete = isMatrixComplete(matrix);
+  const ratingsComplete = isBinaryRatingsComplete(ratings);
 
-  const handleSelect = (
-    key: keyof PartialSentimentMatrix,
-    signal: string,
-  ) => {
-    setMatrix((prev) => ({ ...prev, [key]: signal }));
+  const handleItemSelect = (item: SurveyItem) => {
+    setSelectedItem(item);
+    setPurchaseIntent(null);
+    setRatings({});
+    setStep('intent');
   };
 
-  const handleIntent = async (decision: ConversionDecision) => {
-    if (!isMatrixComplete(matrix)) return;
-    const result = buildSurveyPayload(
-      PRODUCT_DRESS,
-      'STALL_07',
-      matrix,
-      decision,
-    );
+  const handleIntent = (decision: ConversionDecision) => {
+    setPurchaseIntent(decision);
+    setRatings({});
+    setStep('ratings');
+  };
+
+  const handleRating = (key: AttributeKey, value: boolean) => {
+    setRatings((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedItem || !purchaseIntent || !isBinaryRatingsComplete(ratings)) return;
+
+    const record: SurveyBResponse = {
+      session_token: getSessionToken(),
+      selected_item: selectedItem.id,
+      purchase_intent: purchaseIntent,
+      fabric: ratings.fabric,
+      fit: ratings.fit,
+      colour: ratings.colour,
+      price: ratings.price,
+    };
+
     setSaving(true);
     setSaveOutcome(null);
-    const outcome = await persistSurveyResponse('B', result);
+    const outcome = await persistSurveyBResponse(record);
     setSaveOutcome(outcome);
     setSaving(false);
-    setPayload(result);
-    setShowIntent(false);
+    setResponse(record);
+    setStep('result');
   };
 
   const handleTryAgain = () => {
     resetSession();
-    setMatrix({});
-    setPayload(null);
+    setSelectedItem(null);
+    setPurchaseIntent(null);
+    setRatings({});
+    setResponse(null);
     setSaveOutcome(null);
-    setShowIntent(false);
+    setStep('items');
   };
 
-  if (payload) {
+  if (step === 'result' && response && selectedItem) {
     return (
-      <div className="app-shell" style={styles.page}>
-        <main style={styles.main}>
-          <ProductHeader product={PRODUCT_DRESS} variant="warm" />
+      <div className="app-shell" style={{ background: '#f5efe6' }}>
+        <main className="survey-main">
+          <ProductHeader item={selectedItem} variant="warm" />
           <SaveStatus outcome={saveOutcome} />
-          <JsonPreview payload={payload} />
-          <button type="button" className="choice-btn" style={styles.tryAgainBtn} onClick={handleTryAgain}>
+          <ResponsePreview record={response} />
+          <button
+            type="button"
+            className="choice-btn"
+            style={{ marginTop: 20, width: '100%', fontSize: 18, borderColor: '#d4c9b8' }}
+            onClick={handleTryAgain}
+          >
             Try Again
           </button>
-          <Link to="/" style={styles.backLink}>
+          <Link to="/" className="survey-back-link">
             ← Back to samples
           </Link>
         </main>
@@ -80,117 +107,123 @@ export function SurveyB() {
     );
   }
 
+  if (step === 'items') {
+    return (
+      <div className="app-shell" style={{ background: '#f5efe6' }}>
+        <main className="survey-main survey-main--fill">
+          <ItemSelection variant="warm" onSelect={handleItemSelect} />
+        </main>
+        <footer className="privacy-footer">
+          Anonymous session — no personal data collected
+        </footer>
+      </div>
+    );
+  }
+
+  if (!selectedItem) return null;
+
   return (
-    <div className="app-shell" style={styles.page}>
-      <main style={styles.main}>
-        <ProductHeader product={PRODUCT_DRESS} variant="warm" />
+    <div className="app-shell" style={{ background: '#f5efe6' }}>
+      <main className={`survey-main survey-main--fill${ratingsComplete ? ' survey-main--with-sticky' : ''}`}>
+        <ProductHeader item={selectedItem} variant="warm" />
 
-        <p style={styles.instruction}>Tap one option per category</p>
-
-        <div style={styles.grid}>
-          {AXIS_CONFIGS.map((axis) => {
-            const selected = matrix[axis.key];
-            const isFit = axis.key === 'size_fit';
-
-            return (
-              <div key={axis.key} style={styles.gridCell}>
-                <h3 style={styles.cellLabel}>{axis.label}</h3>
-                <div style={isFit ? styles.fitOptions : styles.binaryOptions}>
-                  {axis.options.map((opt) => {
-                    const isSelected = selected === opt.signal;
-                    const isNegative =
-                      opt.signal === 'TOO_SMALL' ||
-                      opt.signal === 'TOO_LARGE' ||
-                      opt.signal === 'DISLIKE_SHADE' ||
-                      opt.signal === 'UNCOMFORTABLE_PROPORTIONS' ||
-                      opt.signal === 'HARSH_FABRIC';
-
-                    return (
-                      <button
-                        key={opt.signal}
-                        type="button"
-                        className={`choice-btn${isSelected ? ' selected' : ''}`}
-                        style={{
-                          ...styles.gridBtn,
-                          ...(isFit ? styles.fitBtn : {}),
-                        }}
-                        aria-pressed={isSelected}
-                        onClick={() => handleSelect(axis.key, opt.signal)}
-                      >
-                        <span style={styles.icon} aria-hidden="true">
-                          {isFit
-                            ? opt.signal === 'TOO_SMALL'
-                              ? '−'
-                              : opt.signal === 'PERFECT'
-                                ? '✓'
-                                : '+'
-                            : isNegative
-                              ? '👎'
-                              : '👍'}
-                        </span>
-                        <span>{opt.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {matrixComplete && !showIntent && (
-          <div style={styles.stickyBar}>
+        {step === 'intent' && (
+          <div
+            className="survey-card"
+            style={{
+              background: '#faf6f0',
+              border: '1px solid #e0d5c5',
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+            }}
+          >
+            <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 600, color: '#666' }}>Your Decision</h2>
+            <p style={{ margin: '0 0 20px', fontSize: 20, fontWeight: 500, lineHeight: 1.4 }}>{INTENT_STEM}</p>
+            <div className="intent-tiles">
+              <button
+                type="button"
+                className="choice-btn intent-tile"
+                style={{ borderColor: '#d4c9b8' }}
+                onClick={() => handleIntent('KEEP_AND_WEAR')}
+              >
+                <span className="intent-tile-icon">✓</span>
+                <span>{INTENT_LABEL_PURCHASE}</span>
+              </button>
+              <button
+                type="button"
+                className="choice-btn intent-tile"
+                style={{ borderColor: '#d4c9b8' }}
+                onClick={() => handleIntent('LEAVE_AND_SWAP')}
+              >
+                <span className="intent-tile-icon">↻</span>
+                <span>{INTENT_LABEL_LEAVE}</span>
+              </button>
+            </div>
             <button
               type="button"
-              className="choice-btn selected"
-              style={styles.continueBtn}
-              onClick={() => setShowIntent(true)}
+              style={{ marginTop: 16, width: '100%', padding: 12, background: 'none', border: 'none', color: '#666', fontSize: 16 }}
+              onClick={() => setStep('items')}
             >
-              Continue
+              Back to items
             </button>
           </div>
         )}
 
-        {showIntent && (
-          <div style={styles.overlay} role="dialog" aria-modal="true" aria-label="Your decision">
-            <div style={styles.sheet}>
-              <h2 style={styles.sheetTitle}>Your Decision</h2>
-              <p style={styles.intentStem}>{INTENT_STEM}</p>
-              <div style={styles.intentTiles}>
-                <button
-                  type="button"
-                  className="choice-btn"
-                  style={styles.intentTile}
-                  disabled={saving}
-                  onClick={() => handleIntent('KEEP_AND_WEAR')}
-                >
-                  <span style={styles.tileIcon}>✓</span>
-                  <span>{saving ? 'Saving…' : INTENT_LABEL_PURCHASE}</span>
-                </button>
-                <button
-                  type="button"
-                  className="choice-btn"
-                  style={styles.intentTile}
-                  disabled={saving}
-                  onClick={() => handleIntent('LEAVE_AND_SWAP')}
-                >
-                  <span style={styles.tileIcon}>↻</span>
-                  <span>{saving ? 'Saving…' : INTENT_LABEL_LEAVE}</span>
-                </button>
-              </div>
-              <button
-                type="button"
-                style={styles.cancelBtn}
-                disabled={saving}
-                onClick={() => setShowIntent(false)}
-              >
-                Back to ratings
-              </button>
+        {step === 'ratings' && (
+          <div className="survey-b-body">
+            <p className="survey-b-prompt">What do you think about this product?</p>
+            <div className="attribute-row">
+              {SURVEY_B_AXES.map((axis) => {
+                const selected = ratings[axis.key];
+                const thumbsUpSelected = selected === true;
+                const thumbsDownSelected = selected === false;
+
+                return (
+                  <div key={axis.key} className="attribute-col">
+                    <button
+                      type="button"
+                      className={`choice-btn thumb-btn${thumbsUpSelected ? ' selected' : ''}`}
+                      style={{ borderColor: '#d4c9b8' }}
+                      aria-pressed={thumbsUpSelected}
+                      aria-label={`${axis.label}: thumbs up`}
+                      onClick={() => handleRating(axis.key, true)}
+                    >
+                      <span className="thumb-icon" aria-hidden="true">👍</span>
+                    </button>
+                    <span className="attribute-label">{axis.label}</span>
+                    <button
+                      type="button"
+                      className={`choice-btn thumb-btn${thumbsDownSelected ? ' selected' : ''}`}
+                      style={{ borderColor: '#d4c9b8' }}
+                      aria-pressed={thumbsDownSelected}
+                      aria-label={`${axis.label}: thumbs down`}
+                      onClick={() => handleRating(axis.key, false)}
+                    >
+                      <span className="thumb-icon" aria-hidden="true">👎</span>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        <Link to="/" style={styles.backLink}>
+        {step === 'ratings' && ratingsComplete && (
+          <div className="sticky-bar sticky-bar--warm">
+            <button
+              type="button"
+              className="choice-btn selected sticky-bar-btn"
+              disabled={saving}
+              onClick={handleSubmit}
+            >
+              {saving ? 'Saving…' : 'Submit'}
+            </button>
+          </div>
+        )}
+
+        <Link to="/" className="survey-back-link">
           ← Back to samples
         </Link>
       </main>
@@ -200,155 +233,3 @@ export function SurveyB() {
     </div>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  page: {
-    background: '#f5efe6',
-  },
-  main: {
-    flex: 1,
-    padding: 24,
-    maxWidth: 720,
-    margin: '0 auto',
-    width: '100%',
-    paddingBottom: 100,
-  },
-  instruction: {
-    margin: '0 0 16px',
-    color: '#666',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: 16,
-  },
-  gridCell: {
-    background: '#faf6f0',
-    border: '1px solid #e0d5c5',
-    borderRadius: 8,
-    padding: 16,
-  },
-  cellLabel: {
-    margin: '0 0 12px',
-    fontSize: 16,
-    fontWeight: 600,
-    textAlign: 'center',
-  },
-  binaryOptions: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-  },
-  fitOptions: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-  },
-  gridBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    justifyContent: 'center',
-    width: '100%',
-    fontSize: 15,
-    padding: '12px 10px',
-    borderColor: '#d4c9b8',
-  },
-  fitBtn: {
-    fontSize: 14,
-  },
-  icon: {
-    fontSize: 18,
-    lineHeight: 1,
-  },
-  stickyBar: {
-    position: 'fixed',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: '16px 24px',
-    paddingBottom: 'calc(16px + env(safe-area-inset-bottom))',
-    background: 'rgba(245, 239, 230, 0.95)',
-    borderTop: '1px solid #e0d5c5',
-    display: 'flex',
-    justifyContent: 'center',
-  },
-  continueBtn: {
-    width: '100%',
-    maxWidth: 400,
-    fontSize: 18,
-    fontWeight: 600,
-  },
-  overlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.4)',
-    display: 'flex',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    zIndex: 100,
-  },
-  sheet: {
-    background: '#faf6f0',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: '24px 24px calc(24px + env(safe-area-inset-bottom))',
-    width: '100%',
-    maxWidth: 720,
-  },
-  sheetTitle: {
-    margin: '0 0 8px',
-    fontSize: 18,
-    fontWeight: 600,
-    color: '#666',
-  },
-  intentStem: {
-    margin: '0 0 20px',
-    fontSize: 20,
-    fontWeight: 500,
-    lineHeight: 1.4,
-  },
-  intentTiles: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: 12,
-  },
-  intentTile: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 8,
-    padding: '20px 12px',
-    fontSize: 17,
-    fontWeight: 600,
-    borderColor: '#d4c9b8',
-    minHeight: 100,
-  },
-  tileIcon: {
-    fontSize: 28,
-    lineHeight: 1,
-  },
-  cancelBtn: {
-    marginTop: 16,
-    width: '100%',
-    padding: 12,
-    background: 'none',
-    border: 'none',
-    color: '#666',
-    fontSize: 16,
-  },
-  tryAgainBtn: {
-    marginTop: 20,
-    width: '100%',
-    fontSize: 18,
-    borderColor: '#d4c9b8',
-  },
-  backLink: {
-    display: 'inline-block',
-    marginTop: 20,
-    fontSize: 15,
-    color: '#666',
-  },
-};
