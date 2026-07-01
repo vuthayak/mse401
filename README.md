@@ -76,11 +76,14 @@ This app is a static web app designed to be hosted on **GitHub Pages**.
 
 1. Push this repo to GitHub (repo name should be `mse401`, or update `base` in [`vite.config.ts`](vite.config.ts)).
 2. Go to **Settings → Pages → Build and deployment**.
-3. Set **Source** to **GitHub Actions**.
+3. Set **Source** to **GitHub Actions** (not “Deploy from branch”).
+4. If the site was previously deployed from the `main` branch, switching to GitHub Actions is required — otherwise GitHub serves the raw dev `index.html` and you will see a **blank page**.
 
-**Deploy:** Push to the `main` branch. The workflow in [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) builds and deploys automatically.
+**Deploy:** Push to the `main` branch. The workflow in [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) builds `dist/` and deploys that artifact automatically.
 
 **Live URL:** `https://<your-github-username>.github.io/mse401/`
+
+**Verify deployment:** View page source on the live site. You should see `/mse401/assets/index-….js`, **not** `/src/main.tsx`.
 
 **iPad:** Open that URL in Safari → **Share → Add to Home Screen** for a kiosk-style shortcut.
 
@@ -209,8 +212,8 @@ zip -r mse401-fitting-room-surveys.zip mse401 \
 | `npm install` fails | Confirm Node.js 18+; delete `node_modules` and retry |
 | Port 5173 in use | Vite will pick the next free port, or stop the other process |
 | Could not save to database | Run `supabase/schema.sql`; confirm anon RLS insert policy; check browser console |
-| Blank page on GitHub Pages | Confirm repo name matches `base` in `vite.config.ts` (default: `/mse401/`) |
-| Blank page after local build | Run `npm run preview` and open the URL shown (includes `/mse401/` in production) |
+| Blank page on GitHub Pages | **Most common:** Pages **Source** is still “Deploy from branch → main”. Change to **GitHub Actions**, then re-run the deploy workflow. View source: if you see `/src/main.tsx`, the built `dist/` is not being served. |
+| Blank page after local build | Run `npm run build && npm run preview` and open `http://localhost:4173/mse401/` (production base path) |
 | iPad can't reach dev server | Use `npm run dev -- --host` and allow the port through your firewall |
 
 ## Privacy note
