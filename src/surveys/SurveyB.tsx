@@ -13,7 +13,7 @@ import {
   INTENT_LABEL_LEAVE,
   isBinaryRatingsComplete,
   type AttributeKey,
-  type ConversionDecision,
+  type IntentDecision,
   type PartialBinaryRatings,
   type SurveyBResponse,
   type SurveyItem,
@@ -24,7 +24,7 @@ type SurveyStep = 'items' | 'intent' | 'ratings' | 'result';
 export function SurveyB() {
   const [step, setStep] = useState<SurveyStep>('items');
   const [selectedItem, setSelectedItem] = useState<SurveyItem | null>(null);
-  const [purchaseIntent, setPurchaseIntent] = useState<ConversionDecision | null>(null);
+  const [intent, setIntent] = useState<IntentDecision | null>(null);
   const [ratings, setRatings] = useState<PartialBinaryRatings>({});
   const [response, setResponse] = useState<SurveyBResponse | null>(null);
   const [saving, setSaving] = useState(false);
@@ -34,13 +34,13 @@ export function SurveyB() {
 
   const handleItemSelect = (item: SurveyItem) => {
     setSelectedItem(item);
-    setPurchaseIntent(null);
+    setIntent(null);
     setRatings({});
     setStep('intent');
   };
 
-  const handleIntent = (decision: ConversionDecision) => {
-    setPurchaseIntent(decision);
+  const handleIntent = (decision: IntentDecision) => {
+    setIntent(decision);
     setRatings({});
     setStep('ratings');
   };
@@ -50,12 +50,12 @@ export function SurveyB() {
   };
 
   const handleSubmit = async () => {
-    if (!selectedItem || !purchaseIntent || !isBinaryRatingsComplete(ratings)) return;
+    if (!selectedItem || !intent || !isBinaryRatingsComplete(ratings)) return;
 
     const record: SurveyBResponse = {
       session_token: getSessionToken(),
       selected_item: selectedItem.id,
-      purchase_intent: purchaseIntent,
+      intent,
       fabric: ratings.fabric,
       fit: ratings.fit,
       colour: ratings.colour,
@@ -74,7 +74,7 @@ export function SurveyB() {
   const handleTryAgain = () => {
     resetSession();
     setSelectedItem(null);
-    setPurchaseIntent(null);
+    setIntent(null);
     setRatings({});
     setResponse(null);
     setSaveOutcome(null);
@@ -146,7 +146,7 @@ export function SurveyB() {
                 type="button"
                 className="choice-btn intent-tile"
                 style={{ borderColor: '#d4c9b8' }}
-                onClick={() => handleIntent('KEEP_AND_WEAR')}
+                onClick={() => handleIntent('YES')}
               >
                 <span className="intent-tile-icon">✓</span>
                 <span>{INTENT_LABEL_PURCHASE}</span>
@@ -155,7 +155,7 @@ export function SurveyB() {
                 type="button"
                 className="choice-btn intent-tile"
                 style={{ borderColor: '#d4c9b8' }}
-                onClick={() => handleIntent('LEAVE_AND_SWAP')}
+                onClick={() => handleIntent('NO')}
               >
                 <span className="intent-tile-icon">↻</span>
                 <span>{INTENT_LABEL_LEAVE}</span>

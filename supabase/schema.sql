@@ -12,7 +12,7 @@ create table if not exists public.survey_a_responses (
   fit smallint not null check (fit between 1 and 5),
   colour smallint not null check (colour between 1 and 5),
   price smallint not null check (price between 1 and 5),
-  purchase_intent text not null check (purchase_intent in ('KEEP_AND_WEAR', 'LEAVE_AND_SWAP'))
+  intent text not null check (intent in ('YES', 'NO'))
 );
 
 create table if not exists public.survey_b_responses (
@@ -20,7 +20,7 @@ create table if not exists public.survey_b_responses (
   created_at timestamptz not null default now(),
   session_token text not null,
   selected_item text not null,
-  purchase_intent text not null check (purchase_intent in ('KEEP_AND_WEAR', 'LEAVE_AND_SWAP')),
+  intent text not null check (intent in ('YES', 'NO')),
   fabric boolean not null,
   fit boolean not null,
   colour boolean not null,

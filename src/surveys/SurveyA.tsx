@@ -12,7 +12,7 @@ import {
   INTENT_LABEL_PURCHASE,
   INTENT_LABEL_LEAVE,
   isScaleRatingsComplete,
-  type ConversionDecision,
+  type IntentDecision,
   type PartialScaleRatings,
   type ScaleRating,
   type SurveyAResponse,
@@ -52,7 +52,7 @@ export function SurveyA() {
     }
   };
 
-  const handleIntent = async (decision: ConversionDecision) => {
+  const handleIntent = async (decision: IntentDecision) => {
     if (!selectedItem || !isScaleRatingsComplete(ratings)) return;
 
     const record: SurveyAResponse = {
@@ -62,7 +62,7 @@ export function SurveyA() {
       fit: ratings.fit,
       colour: ratings.colour,
       price: ratings.price,
-      purchase_intent: decision,
+      intent: decision,
     };
 
     setSaving(true);
@@ -167,7 +167,7 @@ export function SurveyA() {
                 className="choice-btn"
                 style={{ width: '100%', fontSize: 18 }}
                 disabled={saving}
-                onClick={() => handleIntent('KEEP_AND_WEAR')}
+                onClick={() => handleIntent('YES')}
               >
                 {saving ? 'Saving…' : INTENT_LABEL_PURCHASE}
               </button>
@@ -176,7 +176,7 @@ export function SurveyA() {
                 className="choice-btn"
                 style={{ width: '100%', fontSize: 18 }}
                 disabled={saving}
-                onClick={() => handleIntent('LEAVE_AND_SWAP')}
+                onClick={() => handleIntent('NO')}
               >
                 {saving ? 'Saving…' : INTENT_LABEL_LEAVE}
               </button>

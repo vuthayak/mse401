@@ -1,4 +1,4 @@
-export type ConversionDecision = 'KEEP_AND_WEAR' | 'LEAVE_AND_SWAP';
+export type IntentDecision = 'YES' | 'NO';
 
 export type ScaleRating = 1 | 2 | 3 | 4 | 5;
 
@@ -8,15 +8,44 @@ export interface SurveyItem {
   id: string;
   title: string;
   tagline: string;
-  imageUrl?: string;
+  imageUrl: string;
+}
+
+function itemImage(filename: string): string {
+  return `${import.meta.env.BASE_URL}items/${filename}`;
 }
 
 export const SURVEY_ITEMS: SurveyItem[] = [
-  { id: 'item-1', title: 'Item 1', tagline: 'Placeholder tagline for item one.' },
-  { id: 'item-2', title: 'Item 2', tagline: 'Placeholder tagline for item two.' },
-  { id: 'item-3', title: 'Item 3', tagline: 'Placeholder tagline for item three.' },
-  { id: 'item-4', title: 'Item 4', tagline: 'Placeholder tagline for item four.' },
-  { id: 'item-5', title: 'Item 5', tagline: 'Placeholder tagline for item five.' },
+  {
+    id: 'nike-windbreaker',
+    title: 'Nike Windrunner Windbreaker',
+    tagline: 'Lightweight black hooded windbreaker with a classic chevron seam.',
+    imageUrl: itemImage('nike-windbreaker.png'),
+  },
+  {
+    id: 'adidas-track-jacket',
+    title: 'Adidas Santiago Track Jacket',
+    tagline: 'Color-blocked track jacket with the iconic three stripes.',
+    imageUrl: itemImage('adidas-track-jacket.png'),
+  },
+  {
+    id: 'waterloo-hoodie',
+    title: 'University of Waterloo Zip Hoodie',
+    tagline: 'Heather grey zip-up hoodie with university branding.',
+    imageUrl: itemImage('waterloo-hoodie.png'),
+  },
+  {
+    id: 'black-zip-hoodie',
+    title: 'Black Zip-Up Hoodie',
+    tagline: 'Essential full-zip hoodie in solid black for everyday layering.',
+    imageUrl: itemImage('black-zip-hoodie.png'),
+  },
+  {
+    id: 'chevrolet-jersey',
+    title: 'Chevrolet Graphic Jersey Tee',
+    tagline: 'Maroon athletic jersey tee with a vintage Chevrolet graphic.',
+    imageUrl: itemImage('chevrolet-jersey.png'),
+  },
 ];
 
 export interface ScaleAxisConfig {
@@ -118,13 +147,13 @@ export interface SurveyAResponse {
   fit: ScaleRating;
   colour: ScaleRating;
   price: ScaleRating;
-  purchase_intent: ConversionDecision;
+  intent: IntentDecision;
 }
 
 export interface SurveyBResponse {
   session_token: string;
   selected_item: string;
-  purchase_intent: ConversionDecision;
+  intent: IntentDecision;
   fabric: boolean;
   fit: boolean;
   colour: boolean;
