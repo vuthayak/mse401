@@ -47,7 +47,7 @@ export function ItemSelection({ variant, onSelect }: ItemSelectionProps) {
         ))}
       </div>
       <Link to="/" className="survey-back-link">
-        ← Back to samples
+        ← Back to start
       </Link>
     </div>
   );

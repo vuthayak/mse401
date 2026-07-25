@@ -3,6 +3,7 @@
 grant usage on schema public to anon;
 grant insert on table public.survey_a_responses to anon;
 grant insert on table public.survey_b_responses to anon;
+grant insert on table public.survey_c_responses to anon;
 
 drop policy if exists "anon_insert_survey_a_responses" on public.survey_a_responses;
 create policy "anon_insert_survey_a_responses"
@@ -15,6 +16,14 @@ create policy "anon_insert_survey_a_responses"
 drop policy if exists "anon_insert_survey_b_responses" on public.survey_b_responses;
 create policy "anon_insert_survey_b_responses"
   on public.survey_b_responses
+  as permissive
+  for insert
+  to anon
+  with check (true);
+
+drop policy if exists "anon_insert_survey_c_responses" on public.survey_c_responses;
+create policy "anon_insert_survey_c_responses"
+  on public.survey_c_responses
   as permissive
   for insert
   to anon

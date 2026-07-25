@@ -2,9 +2,14 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ItemSelection } from '../components/ItemSelection';
 import { ProductHeader } from '../components/ProductHeader';
+import { RecommenderScreen } from '../components/RecommenderScreen';
 import { ResponsePreview } from '../components/ResponsePreview';
 import { SaveStatus } from '../components/SaveStatus';
 import { persistSurveyBResponse, type PersistOutcome } from '../lib/persistSurvey';
+import {
+  getUnhappyAttributesFromBinary,
+  recommendItem,
+} from '../lib/recommendItem';
 import { getSessionToken, resetSession } from '../lib/session';
 import {
   SURVEY_B_AXES,
@@ -82,6 +87,30 @@ export function SurveyB() {
   };
 
   if (step === 'result' && response && selectedItem) {
+    if (response.intent === 'NO') {
+      const recommendation = recommendItem(
+        selectedItem.id,
+        getUnhappyAttributesFromBinary({
+          fabric: response.fabric,
+          fit: response.fit,
+          colour: response.colour,
+          price: response.price,
+        }),
+      );
+
+      if (recommendation) {
+        return (
+          <RecommenderScreen
+            variant="warm"
+            originalItem={selectedItem}
+            recommendation={recommendation}
+            saveOutcome={saveOutcome}
+            onStartOver={handleTryAgain}
+          />
+        );
+      }
+    }
+
     return (
       <div className="app-shell" style={{ background: '#f5efe6' }}>
         <main className="survey-main">

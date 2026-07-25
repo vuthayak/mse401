@@ -1,8 +1,12 @@
 import type { CSSProperties } from 'react';
-import type { SurveyAResponse, SurveyBResponse } from '../types/survey';
+import type {
+  SurveyAResponse,
+  SurveyBResponse,
+  SurveyCResponse,
+} from '../types/survey';
 
 interface ResponsePreviewProps {
-  record: SurveyAResponse | SurveyBResponse;
+  record: SurveyAResponse | SurveyBResponse | SurveyCResponse;
 }
 
 export function ResponsePreview({ record }: ResponsePreviewProps) {

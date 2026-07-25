@@ -54,6 +54,9 @@ export interface ScaleAxisConfig {
   options: { value: ScaleRating; label: string }[];
 }
 
+export const SCALE_EXTREME_LOW_LABEL = 'hate it';
+export const SCALE_EXTREME_HIGH_LABEL = 'love it';
+
 export const SURVEY_A_AXES: ScaleAxisConfig[] = [
   {
     key: 'fabric',
@@ -70,11 +73,11 @@ export const SURVEY_A_AXES: ScaleAxisConfig[] = [
     key: 'fit',
     label: 'Fit',
     options: [
-      { value: 1, label: 'too tight' },
-      { value: 2, label: 'slightly tight' },
+      { value: 1, label: 'too loose' },
+      { value: 2, label: 'slightly loose' },
       { value: 3, label: 'just right' },
-      { value: 4, label: 'slightly loose' },
-      { value: 5, label: 'too loose' },
+      { value: 4, label: 'slightly tight' },
+      { value: 5, label: 'too tight' },
     ],
   },
   {
@@ -158,4 +161,14 @@ export interface SurveyBResponse {
   fit: boolean;
   colour: boolean;
   price: boolean;
+}
+
+export interface SurveyCResponse {
+  session_token: string;
+  selected_item: string;
+  fabric: ScaleRating;
+  fit: ScaleRating;
+  colour: ScaleRating;
+  price: ScaleRating;
+  intent: IntentDecision;
 }
