@@ -6,16 +6,20 @@ export function Landing() {
       <main className="landing-main">
         <h1 className="landing-title">Fitting Room Surveys</h1>
         <p className="landing-subtitle">
-          Sample micro-surveys for iPad kiosk prototypes. Pick a variant to try.
+          Micro-survey for iPad kiosk prototypes. Tap below to start.
         </p>
-        <nav className="landing-nav">
-          <Link to="/survey-a" className="landing-card">
-            <span className="landing-card-label">Sample Survey A</span>
-            <span className="landing-card-desc">Pick an item, then rate one question at a time</span>
+        <nav className="landing-nav landing-nav--split">
+          <Link to="/survey-c" className="landing-card">
+            <span className="landing-card-label">Start Survey</span>
+            <span className="landing-card-desc">
+              Pick an item, rate four attributes, then confirm purchase intent
+            </span>
           </Link>
-          <Link to="/survey-b" className="landing-card">
-            <span className="landing-card-label">Sample Survey B</span>
-            <span className="landing-card-desc">Pick an item, then rate all attributes at once</span>
+          <Link to="/insights" className="landing-card landing-card--secondary">
+            <span className="landing-card-label">Product Insights</span>
+            <span className="landing-card-desc">
+              Retailer view of Survey C ratings, purchase intent, and friction
+            </span>
           </Link>
         </nav>
       </main>

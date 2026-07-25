@@ -2,9 +2,15 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ItemSelection } from '../components/ItemSelection';
 import { ProductHeader } from '../components/ProductHeader';
+import { ScaleOptionList } from '../components/ScaleAxisPanel';
+import { RecommenderScreen } from '../components/RecommenderScreen';
 import { ResponsePreview } from '../components/ResponsePreview';
 import { SaveStatus } from '../components/SaveStatus';
 import { persistSurveyAResponse, type PersistOutcome } from '../lib/persistSurvey';
+import {
+  getUnhappyAttributesFromScale,
+  recommendItem,
+} from '../lib/recommendItem';
 import { getSessionToken, resetSession } from '../lib/session';
 import {
   SURVEY_A_AXES,
@@ -85,6 +91,30 @@ export function SurveyA() {
   };
 
   if (step === 'result' && response && selectedItem) {
+    if (response.intent === 'NO') {
+      const recommendation = recommendItem(
+        selectedItem.id,
+        getUnhappyAttributesFromScale({
+          fabric: response.fabric,
+          fit: response.fit,
+          colour: response.colour,
+          price: response.price,
+        }),
+      );
+
+      if (recommendation) {
+        return (
+          <RecommenderScreen
+            variant="clinical"
+            originalItem={selectedItem}
+            recommendation={recommendation}
+            saveOutcome={saveOutcome}
+            onStartOver={handleStartOver}
+          />
+        );
+      }
+    }
+
     return (
       <div className="app-shell" style={{ background: '#f0f0f0' }}>
         <main className="survey-main">
@@ -141,18 +171,11 @@ export function SurveyA() {
           <div className="survey-card" style={{ background: '#fff', border: '1px solid #ddd', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <p className="survey-step-label">Step {axisIndex + 1} of {SURVEY_A_AXES.length}</p>
             <h2 className="survey-axis-label">{SURVEY_A_AXES[axisIndex].label}</h2>
-            <div className="scale-row">
-              {SURVEY_A_AXES[axisIndex].options.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  className="choice-btn scale-btn"
-                  onClick={() => handleAxisSelect(opt.value)}
-                >
-                  <span className="scale-btn-label">{opt.label}</span>
-                </button>
-              ))}
-            </div>
+            <ScaleOptionList
+              axisKey={SURVEY_A_AXES[axisIndex].key}
+              onSelect={(value) => handleAxisSelect(value)}
+              direction="horizontal"
+            />
           </div>
         )}
 

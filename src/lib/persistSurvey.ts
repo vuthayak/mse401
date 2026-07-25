@@ -1,4 +1,8 @@
-import type { SurveyAResponse, SurveyBResponse } from '../types/survey';
+import type {
+  SurveyAResponse,
+  SurveyBResponse,
+  SurveyCResponse,
+} from '../types/survey';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 
 export type PersistOutcome =
@@ -45,6 +49,30 @@ export async function persistSurveyBResponse(
   }
 
   const { error } = await supabase.from('survey_b_responses').insert(record);
+
+  if (error) {
+    console.error('supabase_insert_error', error);
+    return { status: 'error', message: error.message };
+  }
+
+  return { status: 'saved', recordId: record.session_token };
+}
+
+export async function persistSurveyCResponse(
+  record: SurveyCResponse,
+): Promise<PersistOutcome> {
+  console.log('survey_c_response', record);
+
+  if (!isSupabaseConfigured()) {
+    return { status: 'skipped', reason: 'not_configured' };
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    return { status: 'skipped', reason: 'not_configured' };
+  }
+
+  const { error } = await supabase.from('survey_c_responses').insert(record);
 
   if (error) {
     console.error('supabase_insert_error', error);
