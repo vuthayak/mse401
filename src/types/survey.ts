@@ -36,8 +36,8 @@ export const SURVEY_ITEMS: SurveyItem[] = [
   },
   {
     id: 'black-zip-hoodie',
-    title: 'Black Zip-Up Hoodie',
-    tagline: 'Essential full-zip hoodie in solid black for everyday layering.',
+    title: 'Essential Full-Zip Hoodie',
+    tagline: 'Solid black full-zip hoodie in brushed fleece, cut for everyday layering.',
     imageUrl: itemImage('black-zip-hoodie.png'),
   },
   {

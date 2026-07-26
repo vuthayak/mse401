@@ -1,84 +1,186 @@
-import {
-  SURVEY_ITEMS,
-  type AttributeKey,
-  type ScaleRating,
-  type SurveyItem,
-} from '../types/survey';
+import type { AttributeKey, ScaleRating } from '../types/survey';
 
-/** Mock attribute strengths per item (1–5). Used only by the prototype recommender. */
-const ITEM_PROFILES: Record<string, Record<AttributeKey, number>> = {
-  'nike-windbreaker': { fabric: 3, fit: 4, colour: 4, price: 3 },
-  'adidas-track-jacket': { fabric: 4, fit: 3, colour: 5, price: 3 },
-  'waterloo-hoodie': { fabric: 5, fit: 4, colour: 3, price: 4 },
-  'black-zip-hoodie': { fabric: 4, fit: 5, colour: 4, price: 5 },
-  'chevrolet-jersey': { fabric: 3, fit: 3, colour: 5, price: 4 },
-};
+/**
+ * Client for the two-stage recommender API (see backend/README.md).
+ *
+ * GitHub Pages is static, so the service runs on its own host and the base URL
+ * arrives at build time via VITE_RECOMMENDER_API_URL. When it is absent the
+ * survey still works end to end — the result screen just reports that
+ * recommendations are unavailable instead of inventing one.
+ */
 
-const ATTRIBUTE_LABELS: Record<AttributeKey, string> = {
-  fabric: 'fabric feel',
-  fit: 'fit',
-  colour: 'colour',
-  price: 'value',
-};
+/** Free-tier hosting sleeps when idle, so the first request can be slow. */
+const REQUEST_TIMEOUT_MS = 25_000;
 
-export interface Recommendation {
-  item: SurveyItem;
+export interface RecommendedItem {
+  itemId: string;
+  styleId: string;
+  title: string;
+  brand: string;
+  size: string;
+  colorLabel: string;
+  materialLabel: string;
+  apparelType: string;
+  price: number;
+  /** Relative to the Vite base URL, e.g. "items/black-zip-hoodie.png". */
+  imagePath: string;
   reasons: string[];
+  matchedRules: string[];
+  inStock: number;
 }
 
-export function getUnhappyAttributesFromScale(
-  ratings: Record<AttributeKey, ScaleRating>,
-): AttributeKey[] {
-  return (Object.entries(ratings) as [AttributeKey, ScaleRating][])
-    .filter(([, value]) => value <= 2)
-    .map(([key]) => key);
+export interface CurrentItem {
+  itemId: string;
+  title: string;
+  brand: string;
+  size: string;
+  price: number;
+  imagePath: string;
 }
 
-export function getUnhappyAttributesFromBinary(
-  ratings: Record<AttributeKey, boolean>,
-): AttributeKey[] {
-  return (Object.entries(ratings) as [AttributeKey, boolean][])
-    .filter(([, liked]) => !liked)
-    .map(([key]) => key);
+export interface RecommendationResult {
+  currentItem: CurrentItem;
+  items: RecommendedItem[];
+  strategy: 'llm' | 'vector' | 'heuristic';
+  latencyMs: number;
 }
 
-function buildReasons(unhappyAttributes: AttributeKey[]): string[] {
-  if (unhappyAttributes.length === 0) {
-    return ['A popular alternative from our fitting-room collection.'];
-  }
+export type RecommendationOutcome =
+  | { status: 'ok'; result: RecommendationResult }
+  | { status: 'unavailable'; reason: 'not_configured' }
+  | { status: 'error'; message: string };
 
-  return unhappyAttributes.map(
-    (key) => `Stronger ${ATTRIBUTE_LABELS[key]} based on your feedback`,
-  );
+interface ApiItem {
+  item_id: string;
+  style_id: string;
+  title: string;
+  brand: string;
+  size: string;
+  color_label: string;
+  material_label: string;
+  apparel_type: string;
+  price: number;
+  image_path: string;
+  reasons?: string[];
+  matched_rules?: string[];
+  in_stock?: number;
 }
 
-export function recommendItem(
-  selectedItemId: string,
-  unhappyAttributes: AttributeKey[],
-): Recommendation | null {
-  const candidates = SURVEY_ITEMS.filter((item) => item.id !== selectedItemId);
-  if (candidates.length === 0) return null;
+interface ApiResponse {
+  current_item: ApiItem;
+  recommendations: ApiItem[];
+  strategy: RecommendationResult['strategy'];
+  latency_ms: number;
+}
 
-  const focusAttributes =
-    unhappyAttributes.length > 0
-      ? unhappyAttributes
-      : (['fit', 'fabric', 'colour', 'price'] as AttributeKey[]);
+/** Resolve a catalog image path against the deployed base URL. */
+export function catalogImageUrl(imagePath: string): string {
+  return `${import.meta.env.BASE_URL}${imagePath}`;
+}
 
-  let bestItem = candidates[0];
-  let bestScore = -Infinity;
-
-  for (const candidate of candidates) {
-    const profile = ITEM_PROFILES[candidate.id];
-    const score = focusAttributes.reduce((sum, key) => sum + profile[key], 0);
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestItem = candidate;
-    }
-  }
-
+function toItem(raw: ApiItem): RecommendedItem {
   return {
-    item: bestItem,
-    reasons: buildReasons(unhappyAttributes),
+    itemId: raw.item_id,
+    styleId: raw.style_id,
+    title: raw.title,
+    brand: raw.brand,
+    size: raw.size,
+    colorLabel: raw.color_label,
+    materialLabel: raw.material_label,
+    apparelType: raw.apparel_type,
+    price: raw.price,
+    imagePath: raw.image_path,
+    reasons: raw.reasons ?? [],
+    matchedRules: raw.matched_rules ?? [],
+    inStock: raw.in_stock ?? 0,
   };
+}
+
+export interface RecommendParams {
+  sessionToken: string;
+  selectedItemId: string;
+  ratings: Record<AttributeKey, ScaleRating>;
+  limit?: number;
+  signal?: AbortSignal;
+}
+
+export async function fetchRecommendations({
+  sessionToken,
+  selectedItemId,
+  ratings,
+  limit = 3,
+  signal,
+}: RecommendParams): Promise<RecommendationOutcome> {
+  const baseUrl = import.meta.env.VITE_RECOMMENDER_API_URL;
+  if (!baseUrl) {
+    return { status: 'unavailable', reason: 'not_configured' };
+  }
+
+  const timeout = new AbortController();
+  const timer = setTimeout(() => timeout.abort(), REQUEST_TIMEOUT_MS);
+  // Abort on either the caller unmounting or the timeout elapsing.
+  const onCallerAbort = () => timeout.abort();
+  signal?.addEventListener('abort', onCallerAbort);
+
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/recommend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_token: sessionToken,
+        selected_item_id: selectedItemId,
+        fabric: ratings.fabric,
+        fit: ratings.fit,
+        colour: ratings.colour,
+        price: ratings.price,
+        limit,
+      }),
+      signal: timeout.signal,
+    });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error('recommender_error', response.status, detail);
+      return {
+        status: 'error',
+        message:
+          response.status === 404
+            ? 'No in-stock alternatives were found for this item.'
+            : 'The recommendation service is unavailable right now.',
+      };
+    }
+
+    const payload: ApiResponse = await response.json();
+    return {
+      status: 'ok',
+      result: {
+        currentItem: {
+          itemId: payload.current_item.item_id,
+          title: payload.current_item.title,
+          brand: payload.current_item.brand,
+          size: payload.current_item.size,
+          price: payload.current_item.price,
+          imagePath: payload.current_item.image_path,
+        },
+        items: payload.recommendations.map(toItem),
+        strategy: payload.strategy,
+        latencyMs: payload.latency_ms,
+      },
+    };
+  } catch (error) {
+    if (signal?.aborted) {
+      return { status: 'error', message: 'Request cancelled.' };
+    }
+    const timedOut = error instanceof DOMException && error.name === 'AbortError';
+    console.error('recommender_request_failed', error);
+    return {
+      status: 'error',
+      message: timedOut
+        ? 'The recommendation service took too long to respond.'
+        : 'Could not reach the recommendation service.',
+    };
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onCallerAbort);
+  }
 }

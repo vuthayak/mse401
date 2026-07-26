@@ -3,14 +3,9 @@ import { Link } from 'react-router-dom';
 import { ItemSelection } from '../components/ItemSelection';
 import { ProductHeader } from '../components/ProductHeader';
 import { ScaleOptionList } from '../components/ScaleAxisPanel';
-import { RecommenderScreen } from '../components/RecommenderScreen';
 import { ResponsePreview } from '../components/ResponsePreview';
 import { SaveStatus } from '../components/SaveStatus';
 import { persistSurveyAResponse, type PersistOutcome } from '../lib/persistSurvey';
-import {
-  getUnhappyAttributesFromScale,
-  recommendItem,
-} from '../lib/recommendItem';
 import { getSessionToken, resetSession } from '../lib/session';
 import {
   SURVEY_A_AXES,
@@ -90,31 +85,9 @@ export function SurveyA() {
     setStep('items');
   };
 
+  // Survey A is an unrouted wording variant kept for reference. Live
+  // recommendations run through Survey C, which calls the recommender API.
   if (step === 'result' && response && selectedItem) {
-    if (response.intent === 'NO') {
-      const recommendation = recommendItem(
-        selectedItem.id,
-        getUnhappyAttributesFromScale({
-          fabric: response.fabric,
-          fit: response.fit,
-          colour: response.colour,
-          price: response.price,
-        }),
-      );
-
-      if (recommendation) {
-        return (
-          <RecommenderScreen
-            variant="clinical"
-            originalItem={selectedItem}
-            recommendation={recommendation}
-            saveOutcome={saveOutcome}
-            onStartOver={handleStartOver}
-          />
-        );
-      }
-    }
-
     return (
       <div className="app-shell" style={{ background: '#f0f0f0' }}>
         <main className="survey-main">

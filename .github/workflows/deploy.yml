@@ -37,6 +37,10 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Public base URL of the FastAPI recommender (Render). Only the URL is
+          # exposed to the browser; the Gemini and service-role keys stay on the
+          # API host.
+          VITE_RECOMMENDER_API_URL: ${{ secrets.VITE_RECOMMENDER_API_URL }}
         run: npm run build
 
       - name: Verify production build

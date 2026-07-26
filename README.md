@@ -15,9 +15,32 @@ Lo-fi iPad kiosk prototype for collecting per-item fitting-room feedback.
 1. Pick one of five items
 2. Rate Fabric, Fit, Colour, and Price on a 5-point scale (all on one screen)
 3. Answer purchase intent (`YES` / `NO`)
-4. On `NO`, a mock recommender suggests an alternative item
+4. On `NO`, the [recommender API](backend/README.md) returns up to three in-stock alternatives with reasons
 
 On completion the response is saved to `survey_c_responses` in **Supabase** (when configured), shown on screen, and logged to the console as `survey_c_response`.
+
+## Alternative item recommender
+
+When a shopper declines to buy, the tablet posts their rating vector to a FastAPI
+service that runs the two-stage pipeline from
+[`Recommender System Specification Sheet.md`](Recommender%20System%20Specification%20Sheet.md):
+
+| Stage | Where | What it does |
+|-------|-------|--------------|
+| 1 — heuristic filter | `stage1_candidates()` in Postgres | Hard boundaries over live inventory: in stock only, size ±1 when fit is off, different `material_id` when fabric is rated ≤2, alternate colourway when colour is rated ≤2, `unit_price ≤ 0.75×` when price is rated ≤2 |
+| 2a — attribute similarity | pgvector HNSW | Cosine search over the Stage 1 pool. The query vector is `embed(what they want) − penalty × embed(what they rejected)`, so it points away from the garment that just failed |
+| 2b — ranking | Gemini | Reorders and explains, restricted to the Stage 1 pool. Any item id it invents is discarded |
+
+The recommendation pool is the full catalog (21 styles / 23 colourways / 69 SKUs
+across `public/items/`); the fitting-room picker stays at the original five.
+
+Every stage degrades instead of failing. No Gemini key, a rate limit, or an
+outage all fall back to the deterministic rule ordering, so the tablet always
+shows something. If `VITE_RECOMMENDER_API_URL` is unset the survey still records
+responses and the result screen says recommendations are unavailable.
+
+Setup, deployment, and the request/response contract are in
+[`backend/README.md`](backend/README.md).
 
 ## Retailer insights dashboard
 
@@ -37,7 +60,7 @@ The survey collects ratings and intent only — it has no pricing, revenue, or m
 
 | Metric | Derivation |
 |--------|------------|
-| Realized / unrealized revenue | Each try-on counts as one potential unit at the SKU list price in `src/lib/catalogTaxonomy.ts`. `YES` intent → realized, `NO` → unrealized (lost). **Prices are placeholders — replace them with real catalog pricing.** |
+| Realized / unrealized revenue | Each try-on counts as one potential unit at the SKU list price. `YES` intent → realized, `NO` → unrealized (lost). Prices in `src/lib/catalogTaxonomy.ts` mirror `sku_variations.unit_price` in the Supabase catalog, so the dashboard and a recommendation can never quote different figures. |
 | Primary rejection reason | Among walk-aways (`NO`), the attribute most often rated ≤2. Top performers show the mirror image: the attribute most often rated ≥4 by buyers. |
 | Suggested action | A fixed playbook in `src/lib/storeInsights.ts` mapping the driver attribute to a merchandising step. Heuristics over survey signal, not learned recommendations. Low-sample SKUs (<5 try-ons) are flagged instead. |
 | Try-on volume / conversion over time | Rows are filtered to the selected window (7d / 1m / 3m / all), then bucketed: daily for ≤1 month, weekly for 3 months, weekly or monthly for all-time depending on span. Empty buckets are filled so the axis stays continuous. Conversion % is purchases ÷ try-ons within each bucket. |
@@ -128,14 +151,29 @@ Then run [`supabase/add-survey-c-insights-rpc.sql`](supabase/add-survey-c-insigh
 
 To load ~60 synthetic rows for analysis / demos, run [`supabase/seed-survey-c.sql`](supabase/seed-survey-c.sql) after the table exists. Safe to re-run only if you clear existing seed rows first (see comments in that file).
 
-### 3. Get your API keys
+### 3. Create the product catalog
+
+The recommender needs a catalog to search. In **SQL Editor**, run in order:
+
+1. [`supabase/recommender-schema.sql`](supabase/recommender-schema.sql) — catalog tables, `pgvector`, HNSW index, RLS
+2. [`supabase/recommender-seed.sql`](supabase/recommender-seed.sql) — 21 styles / 23 colourways / 69 SKUs with stock
+3. [`supabase/recommender-rpc.sql`](supabase/recommender-rpc.sql) — `stage1_candidates` + `search_similar_variations`
+
+Then generate embeddings once (see [`backend/README.md`](backend/README.md)):
+
+```bash
+cd backend && .venv/bin/python -m app.embeddings
+```
+
+### 4. Get your API keys
 
 Supabase → **Project Settings** → **API**:
 
-- **Project URL** → `VITE_SUPABASE_URL`
+- **Project URL** → `VITE_SUPABASE_URL` (frontend) and `SUPABASE_URL` (backend)
 - **anon public** key → `VITE_SUPABASE_ANON_KEY`
+- **service_role** key → `SUPABASE_SERVICE_ROLE_KEY` (backend only — never ship it to the browser)
 
-### 4. Local development
+### 5. Local development
 
 ```bash
 cp .env.example .env.local
@@ -143,7 +181,9 @@ cp .env.example .env.local
 
 Fill in your values, then `npm run dev`. Without `.env.local`, surveys still work but only log to the console.
 
-### 5. GitHub Pages (production)
+To get recommendations locally, also start the API (see [`backend/README.md`](backend/README.md)) and point `VITE_RECOMMENDER_API_URL` at it.
+
+### 6. GitHub Pages (production)
 
 Add repository secrets (**Settings** → **Secrets and variables** → **Actions**):
 
@@ -151,8 +191,11 @@ Add repository secrets (**Settings** → **Secrets and variables** → **Actions
 |--------|--------|
 | `VITE_SUPABASE_URL` | Your Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | Your anon public key |
+| `VITE_RECOMMENDER_API_URL` | Public URL of the deployed recommender API, e.g. `https://<service>.onrender.com` |
 
 Push to `main` to redeploy with database support baked into the build.
+
+Pages is a static host, so the recommender runs as a separate Render service. Only its URL reaches the browser — the Gemini and service-role keys stay on that host.
 
 ### Viewing responses
 
@@ -176,8 +219,8 @@ Or Supabase → **Table Editor** → `survey_c_responses`. Each row:
 | `nike-windbreaker` | Nike Windrunner Windbreaker |
 | `adidas-track-jacket` | Adidas Santiago Track Jacket |
 | `waterloo-hoodie` | University of Waterloo Zip Hoodie |
-| `black-zip-hoodie` | Black Zip-Up Hoodie |
-| `chevrolet-jersey` | Chevrolet Racing Jersey |
+| `black-zip-hoodie` | Essential Full-Zip Hoodie |
+| `chevrolet-jersey` | Chevrolet Graphic Jersey Tee |
 
 **Scale:** 1 = hate it … 5 = love it (fit uses the same endpoints; underlying labels run too loose → too tight).
 
@@ -209,8 +252,8 @@ src/
 │   ├── fetchSurveyCInsights.ts  # Insights RPC fetch
 │   ├── surveyCInsights.ts       # Rating aggregates
 │   ├── storeInsights.ts         # Revenue, drivers, volume-over-time, actions
-│   ├── catalogTaxonomy.ts       # Category hierarchy + list prices
-│   ├── recommendItem.ts         # Mock recommender
+│   ├── catalogTaxonomy.ts       # Category hierarchy, mirrors the Supabase catalog
+│   ├── recommendItem.ts         # Recommender API client
 │   ├── session.ts               # Ephemeral anonymous session UUID
 │   └── supabase.ts
 ├── surveys/
@@ -221,12 +264,30 @@ src/
 └── types/survey.ts
 
 supabase/
-├── schema.sql                   # Full schema + RLS
+├── schema.sql                   # Survey response schema + RLS
 ├── add-survey-c-table.sql       # Incremental C table only
 ├── add-survey-c-insights-rpc.sql # Dashboard read RPC
 ├── seed-survey-c.sql            # Synthetic Survey C rows
+├── recommender-schema.sql       # Catalog, inventory, pgvector + HNSW
+├── recommender-seed.sql         # 21 styles / 23 colourways / 69 SKUs
+├── recommender-rpc.sql          # Stage 1 rule engine + vector search
 ├── fix-rls.sql
 └── migrate-intent-yes-no.sql
+
+backend/                         # FastAPI recommender — see backend/README.md
+├── app/
+│   ├── main.py                  # CORS, /health, POST /recommend
+│   ├── rules.py                 # Stage 1 driver + relaxation ladder + reasons
+│   ├── vector_search.py         # pgvector query steering
+│   ├── ranker.py                # Stage 2 Gemini ranking + fallback
+│   ├── embeddings.py            # One-off catalog embedding backfill
+│   ├── gemini_client.py
+│   ├── supabase_client.py
+│   ├── catalog_text.py
+│   ├── config.py
+│   └── schemas.py
+├── tests/
+└── render.yaml
 ```
 
 ## iPad / kiosk tips
@@ -260,6 +321,10 @@ zip -r mse401-fitting-room-surveys.zip mse401 \
 | Port 5173 in use | Vite picks the next free port, or stop the other process |
 | Could not save to database | Run `supabase/schema.sql` or `add-survey-c-table.sql`; confirm anon RLS insert policy; check browser console |
 | Insights dashboard fails to load | Run `supabase/add-survey-c-insights-rpc.sql`; confirm Supabase env vars; check browser console |
+| "Recommendations are not configured" | `VITE_RECOMMENDER_API_URL` is unset at build time. Set it in `.env.local` locally, or as a GitHub Actions secret for Pages |
+| "Could not reach the recommendation service" | API is down or the origin is not in its `CORS_ORIGINS`. Check `GET <api>/health` |
+| First recommendation is slow, later ones fast | Render's free plan sleeps when idle. The client waits up to 25s and shows a loading state |
+| Recommendations ignore style similarity | `item_embeddings` is empty — run `python -m app.embeddings`. `GET <api>/health` reports the count |
 | Blank page on GitHub Pages | Pages **Source** is still “Deploy from branch → main”. Change to **GitHub Actions**, then re-run the deploy workflow. View source: if you see `/src/main.tsx`, `dist/` is not being served. |
 | Blank page after local build | Run `npm run build && npm run preview` and open `http://localhost:4173/mse401/` |
 | iPad can't reach dev server | Use `npm run dev -- --host` and allow the port through your firewall |

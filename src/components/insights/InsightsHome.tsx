@@ -94,8 +94,8 @@ export function InsightsHome() {
           />
         </div>
         <p className="insights-footnote">
-          Revenue uses list prices from <code>src/lib/catalogTaxonomy.ts</code>;
-          each try-on counts as one potential unit.
+          Revenue uses catalog list prices; each try-on counts as one potential
+          unit.
         </p>
 
         <TryOnVolumeChart rows={rows} />
