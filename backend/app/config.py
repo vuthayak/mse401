@@ -46,7 +46,7 @@ def get_settings() -> Settings:
         supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),
         gemini_api_key=os.getenv("GEMINI_API_KEY") or None,
         gemini_chat_model=os.getenv("GEMINI_CHAT_MODEL", "gemini-2.0-flash"),
-        gemini_embed_model=os.getenv("GEMINI_EMBED_MODEL", "text-embedding-004"),
+        gemini_embed_model=os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001"),
         default_store_id=os.getenv("DEFAULT_STORE_ID", "kw-flagship"),
         cors_origins=_split_csv(os.getenv("CORS_ORIGINS", DEFAULT_CORS_ORIGINS)),
         min_candidate_pool=int(os.getenv("MIN_CANDIDATE_POOL", "3")),

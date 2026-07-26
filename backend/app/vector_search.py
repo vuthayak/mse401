@@ -56,12 +56,14 @@ async def similarity_scores(
     desire_text = build_desire_text(current, vector)
     current_text = variation_embedding_text(current)
 
-    embeddings = await gemini.embed_documents([desire_text, current_text])
-    if not embeddings or len(embeddings) < 2:
+    # Separate query/document task types for asymmetric retrieval.
+    desire_vec = await gemini.embed_query(desire_text)
+    current_vecs = await gemini.embed_documents([current_text])
+    if not desire_vec or not current_vecs:
         return {}
 
     query_vector = _apply_negative_override(
-        embeddings[0], embeddings[1], len(unhappy_attributes(vector))
+        desire_vec, current_vecs[0], len(unhappy_attributes(vector))
     )
 
     candidate_ids = [row["variation_id"] for row in candidates]

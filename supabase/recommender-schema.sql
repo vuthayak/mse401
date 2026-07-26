@@ -84,7 +84,7 @@ create table if not exists public.store_inventory (
 
 create table if not exists public.item_embeddings (
   variation_id text primary key references public.sku_variations (variation_id) on delete cascade,
-  -- Gemini text-embedding-004 output dimensionality.
+  -- Gemini embedding output dimensionality (gemini-embedding-001 pinned to 768).
   embedding extensions.vector(768) not null,
   content text not null,
   updated_at timestamptz not null default now()

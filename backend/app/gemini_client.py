@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from typing import Any
 
 from google import genai
@@ -21,6 +22,18 @@ logger = logging.getLogger(__name__)
 # Gemini's free tier caps batch embedding requests, so documents go up in
 # chunks during the one-off backfill.
 EMBED_BATCH_SIZE = 32
+
+# Must match item_embeddings.embedding vector(768) and search_similar_variations.
+# gemini-embedding-001 defaults to 3072; pin 768 via Matryoshka truncation.
+EMBED_OUTPUT_DIM = 768
+
+
+def _l2_normalize(vector: list[float]) -> list[float]:
+    """gemini-embedding-001 does not auto-normalize truncated vectors."""
+    magnitude = math.sqrt(sum(value * value for value in vector))
+    if magnitude == 0:
+        return vector
+    return [value / magnitude for value in vector]
 
 
 class GeminiClient:
@@ -49,6 +62,11 @@ class GeminiClient:
         if self._client is None or not texts:
             return None
 
+        config = types.EmbedContentConfig(
+            task_type=task_type,
+            output_dimensionality=EMBED_OUTPUT_DIM,
+        )
+
         vectors: list[list[float]] = []
         try:
             for start in range(0, len(texts), EMBED_BATCH_SIZE):
@@ -56,9 +74,11 @@ class GeminiClient:
                 response = await self._client.aio.models.embed_content(
                     model=self._settings.gemini_embed_model,
                     contents=batch,
-                    config=types.EmbedContentConfig(task_type=task_type),
+                    config=config,
                 )
-                vectors.extend(list(item.values) for item in response.embeddings)
+                vectors.extend(
+                    _l2_normalize(list(item.values)) for item in response.embeddings
+                )
         except Exception:
             logger.exception("Gemini embedding request failed")
             return None
