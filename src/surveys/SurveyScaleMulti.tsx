@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ItemSelection } from '../components/ItemSelection';
 import { ProductHeader } from '../components/ProductHeader';
@@ -25,6 +25,8 @@ import {
 
 type SurveyStep = 'items' | 'ratings' | 'intent' | 'result';
 
+const TOTAL_PROGRESS_STEPS = 3;
+
 interface SurveyScaleMultiProps {
   pageBackground: string;
   cardBackground: string;
@@ -33,6 +35,41 @@ interface SurveyScaleMultiProps {
   itemSelectionVariant: 'clinical' | 'warm';
   productHeaderVariant: 'clinical' | 'warm';
   recommenderVariant: 'clinical' | 'warm';
+}
+
+function progressValue(step: SurveyStep): number {
+  if (step === 'ratings') return 1;
+  if (step === 'intent') return 2;
+  if (step === 'result') return 3;
+  return 0;
+}
+
+function stepTitle(step: SurveyStep, showingRecommender: boolean): string {
+  if (step === 'items') return 'Choose item — Survey';
+  if (step === 'ratings') return 'Rate attributes — Survey';
+  if (step === 'intent') return 'Your decision — Survey';
+  if (showingRecommender) return 'Recommendation — Survey';
+  return 'Survey complete — Survey';
+}
+
+function stepAnnouncement(step: SurveyStep, showingRecommender: boolean): string {
+  if (step === 'items') return 'Choose an item';
+  if (step === 'ratings') return 'Step 1 of 3: Rate each attribute for this product';
+  if (step === 'intent') return 'Step 2 of 3: Your purchase decision';
+  if (showingRecommender) return 'Step 3 of 3: Recommendation';
+  return 'Step 3 of 3: Survey complete';
+}
+
+function formatMissingHelp(missingLabels: string[]): string {
+  if (missingLabels.length === 0) {
+    return 'All attributes rated. Continue to your purchase decision.';
+  }
+  if (missingLabels.length === 1) {
+    return `Rate ${missingLabels[0]} to continue.`;
+  }
+  const head = missingLabels.slice(0, -1).join(', ');
+  const last = missingLabels[missingLabels.length - 1];
+  return `Rate ${head} and ${last} to continue.`;
 }
 
 export function SurveyScaleMulti({
@@ -50,8 +87,49 @@ export function SurveyScaleMulti({
   const [response, setResponse] = useState<SurveyCResponse | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveOutcome, setSaveOutcome] = useState<PersistOutcome | null>(null);
+  const [statusMessage, setStatusMessage] = useState('');
+  const stepHeadingRef = useRef<HTMLElement | null>(null);
+  const prevRatingsComplete = useRef(false);
 
   const ratingsComplete = isScaleRatingsComplete(ratings);
+  const missingLabels = SURVEY_A_AXES.filter(
+    (axis) => ratings[axis.key] === undefined,
+  ).map((axis) => axis.label);
+  const continueHelpId = 'continue-ratings-help';
+  const progressNow = progressValue(step);
+
+  const recommendation =
+    step === 'result' && response?.intent === 'NO' && selectedItem
+      ? recommendItem(
+          selectedItem.id,
+          getUnhappyAttributesFromScale({
+            fabric: response.fabric,
+            fit: response.fit,
+            colour: response.colour,
+            price: response.price,
+          }),
+        )
+      : null;
+  const showingRecommender = Boolean(recommendation);
+
+  useEffect(() => {
+    document.title = stepTitle(step, showingRecommender);
+  }, [step, showingRecommender]);
+
+  useEffect(() => {
+    setStatusMessage(stepAnnouncement(step, showingRecommender));
+    // Defer focus until after the new step heading mounts.
+    requestAnimationFrame(() => {
+      stepHeadingRef.current?.focus();
+    });
+  }, [step, showingRecommender]);
+
+  useEffect(() => {
+    if (step === 'ratings' && ratingsComplete && !prevRatingsComplete.current) {
+      setStatusMessage('All ratings complete. Continue is available.');
+    }
+    prevRatingsComplete.current = ratingsComplete;
+  }, [ratingsComplete, step]);
 
   const handleItemSelect = (item: SurveyItem) => {
     setSelectedItem(item);
@@ -94,35 +172,37 @@ export function SurveyScaleMulti({
     setStep('items');
   };
 
-  if (step === 'result' && response && selectedItem) {
-    if (response.intent === 'NO') {
-      const recommendation = recommendItem(
-        selectedItem.id,
-        getUnhappyAttributesFromScale({
-          fabric: response.fabric,
-          fit: response.fit,
-          colour: response.colour,
-          price: response.price,
-        }),
-      );
+  if (step === 'result' && response && selectedItem && recommendation) {
+    return (
+      <RecommenderScreen
+        variant={recommenderVariant}
+        originalItem={selectedItem}
+        recommendation={recommendation}
+        saveOutcome={saveOutcome}
+        onStartOver={handleStartOver}
+        stepHeadingRef={stepHeadingRef}
+        statusMessage={statusMessage}
+        progressNow={progressNow}
+      />
+    );
+  }
 
-      if (recommendation) {
-        return (
-          <RecommenderScreen
-            variant={recommenderVariant}
-            originalItem={selectedItem}
-            recommendation={recommendation}
-            saveOutcome={saveOutcome}
-            onStartOver={handleStartOver}
-          />
-        );
-      }
-    }
+  if (step === 'result' && response && selectedItem) {
 
     return (
-      <Shell background={pageBackground}>
-        <main className="survey-main">
+      <Shell background={pageBackground} statusMessage={statusMessage}>
+        <main id="main-content" className="survey-main" tabIndex={-1}>
+          <SurveyProgress value={progressNow} />
           <ProductHeader item={selectedItem} variant={productHeaderVariant} />
+          <h2
+            ref={(el) => {
+              stepHeadingRef.current = el;
+            }}
+            className="visually-hidden"
+            tabIndex={-1}
+          >
+            Survey complete
+          </h2>
           <SaveStatus outcome={saveOutcome} />
           <ResponsePreview record={response} />
           <button
@@ -143,9 +223,15 @@ export function SurveyScaleMulti({
 
   if (step === 'items') {
     return (
-      <Shell background={pageBackground}>
-        <main className="survey-main survey-main--fill">
-          <ItemSelection variant={itemSelectionVariant} onSelect={handleItemSelect} />
+      <Shell background={pageBackground} statusMessage={statusMessage}>
+        <main id="main-content" className="survey-main survey-main--fill" tabIndex={-1}>
+          <ItemSelection
+            variant={itemSelectionVariant}
+            onSelect={handleItemSelect}
+            headingRef={(el) => {
+              stepHeadingRef.current = el;
+            }}
+          />
         </main>
       </Shell>
     );
@@ -154,17 +240,31 @@ export function SurveyScaleMulti({
   if (!selectedItem) return null;
 
   return (
-    <Shell background={pageBackground}>
+    <Shell background={pageBackground} statusMessage={statusMessage}>
       <main
+        id="main-content"
         className={`survey-main survey-main--fill${
-          step === 'ratings' && ratingsComplete ? ' survey-main--with-sticky' : ''
+          step === 'ratings' ? ' survey-main--with-sticky' : ''
         }`}
+        tabIndex={-1}
       >
         <ProductHeader item={selectedItem} variant={productHeaderVariant} />
 
+        {(step === 'ratings' || step === 'intent') && (
+          <SurveyProgress value={progressNow} />
+        )}
+
         {step === 'ratings' && (
           <div className="survey-scale-body">
-            <p className="survey-b-prompt">Rate each attribute for this product</p>
+            <p
+              ref={(el) => {
+                stepHeadingRef.current = el;
+              }}
+              className="survey-b-prompt"
+              tabIndex={-1}
+            >
+              Rate each attribute for this product
+            </p>
             <div className="scale-grid-2x2">
               {SURVEY_A_AXES.map((axis) => (
                 <ScaleAxisPanel
@@ -178,11 +278,16 @@ export function SurveyScaleMulti({
           </div>
         )}
 
-        {step === 'ratings' && ratingsComplete && (
+        {step === 'ratings' && (
           <div className={`sticky-bar ${stickyBarClass}`}>
+            <p id={continueHelpId} className="sticky-bar-help">
+              {formatMissingHelp(missingLabels)}
+            </p>
             <button
               type="button"
-              className="choice-btn selected sticky-bar-btn"
+              className={`choice-btn sticky-bar-btn${ratingsComplete ? ' selected' : ''}`}
+              disabled={!ratingsComplete}
+              aria-describedby={continueHelpId}
               onClick={() => setStep('intent')}
             >
               Continue
@@ -202,13 +307,25 @@ export function SurveyScaleMulti({
               justifyContent: 'center',
             }}
           >
-            <h2 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 600, color: '#666' }}>
+            <h2
+              ref={(el) => {
+                stepHeadingRef.current = el;
+              }}
+              id="intent-heading"
+              tabIndex={-1}
+              style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 600, color: '#595959' }}
+            >
               Your Decision
             </h2>
-            <p style={{ margin: '0 0 20px', fontSize: 20, fontWeight: 500, lineHeight: 1.4 }}>
+            <p id="intent-stem" style={{ margin: '0 0 20px', fontSize: 20, fontWeight: 500, lineHeight: 1.4 }}>
               {INTENT_STEM}
             </p>
-            <div className="intent-choices">
+            {saving && <SaveStatus outcome={null} saving />}
+            <div
+              className="intent-choices"
+              role="group"
+              aria-labelledby="intent-heading intent-stem"
+            >
               <button
                 type="button"
                 className="choice-btn"
@@ -230,15 +347,7 @@ export function SurveyScaleMulti({
             </div>
             <button
               type="button"
-              style={{
-                marginTop: 16,
-                width: '100%',
-                padding: 12,
-                background: 'none',
-                border: 'none',
-                color: '#666',
-                fontSize: 16,
-              }}
+              className="text-btn"
               onClick={() => setStep('ratings')}
             >
               Back to ratings
@@ -254,15 +363,49 @@ export function SurveyScaleMulti({
   );
 }
 
+function SurveyProgress({ value }: { value: number }) {
+  return (
+    <div className="survey-progress-wrap">
+      <p className="survey-step-label" aria-hidden="true">
+        Step {value} of {TOTAL_PROGRESS_STEPS}
+      </p>
+      <div
+        className="survey-progress"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={TOTAL_PROGRESS_STEPS}
+        aria-valuenow={value}
+        aria-label="Survey progress"
+      >
+        {Array.from({ length: TOTAL_PROGRESS_STEPS }, (_, i) => (
+          <span
+            key={i}
+            className="survey-progress-dot"
+            style={{ background: i < value ? '#333' : '#767676' }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Shell({
   background,
   children,
+  statusMessage,
 }: {
   background: string;
   children: ReactNode;
+  statusMessage: string;
 }) {
   return (
     <div className="app-shell" style={{ background }}>
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+      <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+        {statusMessage}
+      </div>
       {children}
       <footer className="privacy-footer">
         Anonymous session — no personal data collected

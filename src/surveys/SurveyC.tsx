@@ -5,7 +5,7 @@ export function SurveyC() {
     <SurveyScaleMulti
       pageBackground="#eef2f6"
       cardBackground="#fff"
-      cardBorder="#cdd5df"
+      cardBorder="#767676"
       stickyBarClass="sticky-bar--clinical"
       itemSelectionVariant="clinical"
       productHeaderVariant="clinical"

@@ -5,15 +5,22 @@ import { SURVEY_ITEMS } from '../types/survey';
 interface ItemSelectionProps {
   variant: 'clinical' | 'warm';
   onSelect: (item: SurveyItem) => void;
+  headingRef?: (el: HTMLHeadingElement | null) => void;
 }
 
-export function ItemSelection({ variant, onSelect }: ItemSelectionProps) {
+export function ItemSelection({ variant, onSelect, headingRef }: ItemSelectionProps) {
   const isClinical = variant === 'clinical';
 
   return (
     <div className="item-selection">
       <div className="item-selection-header">
-        <h2 className="item-selection-heading">Choose an item</h2>
+        <h1
+          ref={headingRef}
+          className="item-selection-heading"
+          tabIndex={-1}
+        >
+          Choose an item
+        </h1>
         <p className="item-selection-subheading">Select the product you tried on.</p>
       </div>
       <div className="item-selection-list">
@@ -24,7 +31,7 @@ export function ItemSelection({ variant, onSelect }: ItemSelectionProps) {
             className="choice-btn item-selection-row"
             style={{
               background: isClinical ? '#fff' : '#faf6f0',
-              borderColor: isClinical ? '#ddd' : '#e0d5c5',
+              borderColor: isClinical ? '#767676' : '#8a7f6e',
             }}
             onClick={() => onSelect(item)}
           >
