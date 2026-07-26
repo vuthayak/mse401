@@ -332,7 +332,7 @@ export interface VolumeSeries {
   period: InsightsPeriod;
   granularity: VolumeGranularity;
   buckets: VolumeBucket[];
-  /** Axis ceiling — exactly the peak bucket, so the tallest bar fills the plot. */
+  /** Axis ceiling — evenly divisible so try-on ticks land on equal integer steps. */
   maxTryOns: number;
   /** Axis ceiling for conversion % (at least 100, or a round step above the peak). */
   maxConversionRate: number;
@@ -438,6 +438,16 @@ function conversionAxisMax(peakRate: number): number {
 }
 
 /**
+ * Axis ceiling for try-on counts: the smallest multiple of `divisions` that
+ * is ≥ peak, so ticks land on even integer steps (0, step, 2·step, …).
+ */
+function evenCountAxisMax(peak: number, divisions = 4): number {
+  if (peak <= 0) return divisions;
+  const step = Math.max(1, Math.ceil(peak / divisions));
+  return step * divisions;
+}
+
+/**
  * Buckets try-ons and conversion rate over an adjustable window.
  * Empty buckets are filled so the time axis stays continuous.
  */
@@ -512,7 +522,7 @@ export function volumeOverTime(
     period,
     granularity,
     buckets,
-    maxTryOns: Math.max(1, maxTryOns),
+    maxTryOns: evenCountAxisMax(maxTryOns),
     maxConversionRate: conversionAxisMax(maxConversionRate),
   };
 }
