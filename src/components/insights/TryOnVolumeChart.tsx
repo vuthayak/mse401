@@ -22,15 +22,11 @@ function yTicks(max: number, count = 4): number[] {
   );
 }
 
-/** Integer ticks for the try-on count axis (deduped for small maxima). */
+/** Evenly spaced integer ticks from 0 to max (inclusive). */
 function countTicks(max: number, count = 4): number[] {
   if (max <= 0) return [0];
-  const ticks = new Set<number>();
-  for (let i = 0; i <= count; i += 1) {
-    ticks.add(Math.round((max / count) * i));
-  }
-  ticks.add(max);
-  return [...ticks].sort((a, b) => a - b);
+  const step = max / count;
+  return Array.from({ length: count + 1 }, (_, i) => step * i);
 }
 
 function formatTick(value: number, asPercent: boolean): string {
@@ -141,48 +137,48 @@ function ComboSvg({ series }: { series: VolumeSeries }) {
         </circle>
       ))}
 
-      {/* Left axis: conversion % */}
-      {convTicks.map((tick) => (
-        <text
-          key={`cl-${tick}`}
-          className="insights-combo-tick insights-combo-tick--conv"
-          x={PAD.left - 8}
-          y={yConv(tick) + 3}
-          textAnchor="end"
-        >
-          {formatTick(tick, true)}
-        </text>
-      ))}
-      <text
-        className="insights-combo-axis-label insights-combo-axis-label--conv"
-        x={14}
-        y={PAD.top + PLOT_H / 2}
-        textAnchor="middle"
-        transform={`rotate(-90 14 ${PAD.top + PLOT_H / 2})`}
-      >
-        % Conversion
-      </text>
-
-      {/* Right axis: try-ons */}
+      {/* Left axis: try-ons */}
       {tryOnTicks.map((tick) => (
         <text
           key={`tl-${tick}`}
           className="insights-combo-tick insights-combo-tick--tryons"
-          x={WIDTH - PAD.right + 8}
+          x={PAD.left - 8}
           y={yTryOn(tick) + 3}
-          textAnchor="start"
+          textAnchor="end"
         >
           {formatTick(tick, false)}
         </text>
       ))}
       <text
         className="insights-combo-axis-label insights-combo-axis-label--tryons"
+        x={14}
+        y={PAD.top + PLOT_H / 2}
+        textAnchor="middle"
+        transform={`rotate(-90 14 ${PAD.top + PLOT_H / 2})`}
+      >
+        Try-ons
+      </text>
+
+      {/* Right axis: conversion % */}
+      {convTicks.map((tick) => (
+        <text
+          key={`cl-${tick}`}
+          className="insights-combo-tick insights-combo-tick--conv"
+          x={WIDTH - PAD.right + 8}
+          y={yConv(tick) + 3}
+          textAnchor="start"
+        >
+          {formatTick(tick, true)}
+        </text>
+      ))}
+      <text
+        className="insights-combo-axis-label insights-combo-axis-label--conv"
         x={WIDTH - 12}
         y={PAD.top + PLOT_H / 2}
         textAnchor="middle"
         transform={`rotate(90 ${WIDTH - 12} ${PAD.top + PLOT_H / 2})`}
       >
-        tryons
+        % Conversion
       </text>
 
       {/* X labels — the last bucket always gets one; skip modulo labels that
