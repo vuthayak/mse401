@@ -1,0 +1,32 @@
+# Render blueprint for the recommender API.
+# Create via Render dashboard → New → Blueprint, pointing at this repo.
+# GitHub Pages is static, so the FastAPI service has to live somewhere it can
+# actually run and hold secrets.
+
+services:
+  - type: web
+    name: mse401-recommender-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # Set these in the Render dashboard — they are secrets.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GEMINI_CHAT_MODEL
+        value: gemini-2.0-flash
+      - key: GEMINI_EMBED_MODEL
+        value: text-embedding-004
+      - key: DEFAULT_STORE_ID
+        value: kw-flagship

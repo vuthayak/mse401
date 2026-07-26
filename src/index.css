@@ -730,8 +730,55 @@ a {
   margin-bottom: 16px;
 }
 
+/* Multiple in-stock alternatives, ranked best first. */
+.recommender-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+}
+
+.recommender-list > li {
+  display: flex;
+}
+
+.recommender-list .recommender-card {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.recommender-rank {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #595959;
+}
+
+.recommender-price {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #1a1a1a;
+}
+
+.recommender-meta {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: #595959;
+}
+
 .recommender-reasons {
-  margin: 0 0 16px;
+  margin: 0;
   padding-left: 20px;
   font-size: 16px;
   line-height: 1.5;
@@ -748,6 +795,66 @@ a {
   color: #595959;
   line-height: 1.45;
   font-style: italic;
+}
+
+/* Placeholder while the API answers; free hosting can cold-start slowly. */
+.recommender-skeleton {
+  gap: 12px;
+  justify-content: flex-start;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.recommender-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.recommender-skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.recommender-skeleton-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.recommender-skeleton-line {
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+}
+
+.recommender-skeleton-line--short {
+  width: 55%;
+}
+
+.recommender-skeleton-thumb,
+.recommender-skeleton-line {
+  background: linear-gradient(90deg, #dfe4e9 25%, #eef1f4 50%, #dfe4e9 75%);
+  background-size: 200% 100%;
+  animation: recommender-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes recommender-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recommender-skeleton-thumb,
+  .recommender-skeleton-line {
+    animation: none;
+  }
 }
 
 /* Landscape iPad / wide kiosk */

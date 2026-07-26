@@ -6,12 +6,15 @@ import { SURVEY_ITEMS, type SurveyItem } from '../types/survey';
  *   apparel type (e.g. Jackets) → design type (e.g. Windbreaker)
  *   → SKU (e.g. Nike Windrunner) → variation (e.g. Black colourway).
  *
- * Each variation leaf maps to one Survey C item id, so metrics at any level
- * aggregate the responses of all variations underneath it.
+ * Ids, labels and prices mirror the Supabase catalog seeded by
+ * supabase/recommender-seed.sql: SKU ids are `styles.style_id`, variation ids
+ * are `sku_variations.variation_id`, and prices are `unit_price`. Keeping them
+ * identical means a figure on this dashboard and a price in a recommendation
+ * can never disagree.
  *
- * `priceUsd` is placeholder retail pricing — the survey collects no price
- * data, so revenue figures are only as accurate as these values. Replace with
- * real catalog pricing when it is available.
+ * Only the five garments carried into the fitting room appear here, because
+ * they are the only ones Survey C can produce responses for. The recommender
+ * draws from the full 21-style catalog.
  */
 
 export type CatalogLevel = 'apparel' | 'design' | 'sku' | 'variation';
@@ -23,8 +26,8 @@ export interface CatalogNode {
   children: CatalogNode[];
   /** Survey item id — set only on variation leaves. */
   itemId?: string;
-  /** Retail price — set only on variation leaves. */
-  priceUsd?: number;
+  /** Catalog unit_price in CAD — set only on variation leaves. */
+  priceCad?: number;
 }
 
 export const CATALOG_LEVEL_SINGULAR: Record<CatalogLevel, string> = {
@@ -53,9 +56,9 @@ function variation(
   id: string,
   label: string,
   itemId: string,
-  priceUsd: number,
+  priceCad: number,
 ): CatalogNode {
-  return { id, label, level: 'variation', children: [], itemId, priceUsd };
+  return { id, label, level: 'variation', children: [], itemId, priceCad };
 }
 
 function sku(id: string, label: string, children: CatalogNode[]): CatalogNode {
@@ -81,44 +84,54 @@ function apparel(
 export const CATALOG_TAXONOMY: CatalogNode[] = [
   apparel('jackets', 'Jackets', [
     design('windbreakers', 'Windbreakers', [
-      sku('nike-windrunner', 'Nike Windrunner', [
-        variation('nike-windrunner-black', 'Black', 'nike-windbreaker', 120),
+      sku('nike-windrunner', 'Nike Windrunner Windbreaker', [
+        variation(
+          'nike-windrunner-black-m',
+          'Black · M',
+          'nike-windbreaker',
+          120.0,
+        ),
       ]),
     ]),
     design('track-jackets', 'Track Jackets', [
-      sku('adidas-santiago', 'Adidas Santiago', [
+      sku('adidas-santiago-track', 'Adidas Santiago Track Jacket', [
         variation(
-          'adidas-santiago-colourblock',
-          'Colour-block',
+          'adidas-santiago-track-colourblock-navy-m',
+          'Navy colour-block · M',
           'adidas-track-jacket',
-          85,
+          85.0,
         ),
       ]),
     ]),
   ]),
   apparel('hoodies', 'Hoodies', [
     design('zip-hoodies', 'Zip Hoodies', [
-      sku('campus-zip-hoodie', 'Campus Zip Hoodie', [
+      sku('waterloo-zip-hoodie', 'University of Waterloo Zip Hoodie', [
         variation(
-          'campus-zip-waterloo-grey',
-          'Waterloo Heather Grey',
+          'waterloo-zip-hoodie-heather-grey-m',
+          'Heather grey · M',
           'waterloo-hoodie',
-          65,
+          65.0,
         ),
       ]),
-      sku('essential-zip-hoodie', 'Essential Zip Hoodie', [
-        variation('essential-zip-black', 'Black', 'black-zip-hoodie', 55),
+      sku('essential-zip-hoodie', 'Essential Full-Zip Hoodie', [
+        variation(
+          'essential-zip-hoodie-black-m',
+          'Black · M',
+          'black-zip-hoodie',
+          55.0,
+        ),
       ]),
     ]),
   ]),
   apparel('tees', 'Tees', [
     design('graphic-jerseys', 'Graphic Jerseys', [
-      sku('chevrolet-jersey-tee', 'Chevrolet Jersey Tee', [
+      sku('chevrolet-graphic-jersey', 'Chevrolet Graphic Jersey Tee', [
         variation(
-          'chevrolet-jersey-maroon',
-          'Maroon',
+          'chevrolet-graphic-jersey-maroon-m',
+          'Maroon · M',
           'chevrolet-jersey',
-          40,
+          45.0,
         ),
       ]),
     ]),
@@ -172,7 +185,7 @@ export function entriesAtLevel(level: CatalogLevel): CatalogEntry[] {
 const PRICE_BY_ITEM = new Map<string, number>(
   ALL_ENTRIES.filter((e) => e.node.itemId).map((e) => [
     e.node.itemId!,
-    e.node.priceUsd ?? 0,
+    e.node.priceCad ?? 0,
   ]),
 );
 

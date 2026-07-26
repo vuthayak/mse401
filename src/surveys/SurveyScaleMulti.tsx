@@ -2,12 +2,15 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ItemSelection } from '../components/ItemSelection';
 import { ProductHeader } from '../components/ProductHeader';
-import { RecommenderScreen } from '../components/RecommenderScreen';
+import {
+  RecommenderScreen,
+  type RecommenderState,
+} from '../components/RecommenderScreen';
 import { ResponsePreview } from '../components/ResponsePreview';
 import { SaveStatus } from '../components/SaveStatus';
 import { ScaleAxisPanel } from '../components/ScaleAxisPanel';
 import { persistSurveyCResponse, type PersistOutcome } from '../lib/persistSurvey';
-import { getUnhappyAttributesFromScale, recommendItem } from '../lib/recommendItem';
+import { fetchRecommendations } from '../lib/recommendItem';
 import { getSessionToken, resetSession } from '../lib/session';
 import {
   SURVEY_A_AXES,
@@ -88,8 +91,11 @@ export function SurveyScaleMulti({
   const [saving, setSaving] = useState(false);
   const [saveOutcome, setSaveOutcome] = useState<PersistOutcome | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
+  const [recommender, setRecommender] = useState<RecommenderState | null>(null);
   const stepHeadingRef = useRef<HTMLElement | null>(null);
   const prevRatingsComplete = useRef(false);
+  // Abandoned when the shopper starts over mid-request.
+  const recommenderRequest = useRef<AbortController | null>(null);
 
   const ratingsComplete = isScaleRatingsComplete(ratings);
   const missingLabels = SURVEY_A_AXES.filter(
@@ -98,19 +104,7 @@ export function SurveyScaleMulti({
   const continueHelpId = 'continue-ratings-help';
   const progressNow = progressValue(step);
 
-  const recommendation =
-    step === 'result' && response?.intent === 'NO' && selectedItem
-      ? recommendItem(
-          selectedItem.id,
-          getUnhappyAttributesFromScale({
-            fabric: response.fabric,
-            fit: response.fit,
-            colour: response.colour,
-            price: response.price,
-          }),
-        )
-      : null;
-  const showingRecommender = Boolean(recommendation);
+  const showingRecommender = recommender !== null;
 
   useEffect(() => {
     document.title = stepTitle(step, showingRecommender);
@@ -160,24 +154,80 @@ export function SurveyScaleMulti({
     setSaveOutcome(outcome);
     setSaving(false);
     setResponse(record);
+
+    if (decision === 'NO') {
+      // Show the result screen immediately and stream the alternatives in, so a
+      // cold API host does not leave the shopper on a blank step.
+      setRecommender({ status: 'loading' });
+      setStep('result');
+      void loadRecommendations(record);
+      return;
+    }
+
+    setRecommender(null);
     setStep('result');
   };
 
+  const loadRecommendations = async (record: SurveyCResponse) => {
+    recommenderRequest.current?.abort();
+    const controller = new AbortController();
+    recommenderRequest.current = controller;
+
+    const outcome = await fetchRecommendations({
+      sessionToken: record.session_token,
+      selectedItemId: record.selected_item,
+      ratings: {
+        fabric: record.fabric,
+        fit: record.fit,
+        colour: record.colour,
+        price: record.price,
+      },
+      signal: controller.signal,
+    });
+
+    if (controller.signal.aborted) return;
+
+    if (outcome.status === 'ok' && outcome.result.items.length > 0) {
+      setRecommender({ status: 'ready', result: outcome.result });
+      setStatusMessage(
+        `Step 3 of 3: ${outcome.result.items.length} alternative${
+          outcome.result.items.length === 1 ? '' : 's'
+        } found`,
+      );
+      return;
+    }
+
+    setRecommender({
+      status: 'empty',
+      message:
+        outcome.status === 'error'
+          ? outcome.message
+          : outcome.status === 'unavailable'
+            ? 'Recommendations are not configured for this deployment.'
+            : 'Nothing comparable is in stock at this store right now.',
+    });
+  };
+
   const handleStartOver = () => {
+    recommenderRequest.current?.abort();
+    recommenderRequest.current = null;
     resetSession();
     setSelectedItem(null);
     setRatings({});
     setResponse(null);
     setSaveOutcome(null);
+    setRecommender(null);
     setStep('items');
   };
 
-  if (step === 'result' && response && selectedItem && recommendation) {
+  useEffect(() => () => recommenderRequest.current?.abort(), []);
+
+  if (step === 'result' && response && selectedItem && recommender) {
     return (
       <RecommenderScreen
         variant={recommenderVariant}
         originalItem={selectedItem}
-        recommendation={recommendation}
+        state={recommender}
         saveOutcome={saveOutcome}
         onStartOver={handleStartOver}
         stepHeadingRef={stepHeadingRef}

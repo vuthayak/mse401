@@ -103,9 +103,9 @@ function VariationCard({
       <div className="insights-product-body">
         <h3 className="insights-product-title">
           {node.label}
-          {node.priceUsd ? (
+          {node.priceCad ? (
             <span className="insights-product-price">
-              {formatCurrency(node.priceUsd)}
+              {formatCurrency(node.priceCad)}
             </span>
           ) : null}
         </h3>
