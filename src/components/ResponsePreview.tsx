@@ -23,7 +23,7 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 24,
     padding: 16,
     background: '#fff',
-    border: '1px solid #ccc',
+    border: '1px solid #767676',
     borderRadius: 8,
     overflow: 'auto',
   },

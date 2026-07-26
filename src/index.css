@@ -40,11 +40,43 @@ a {
     env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  top: -48px;
+  left: 12px;
+  z-index: 100;
+  padding: 10px 16px;
+  background: #222;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.skip-link:focus {
+  top: 12px;
+  outline: 3px solid #666;
+  outline-offset: 2px;
+}
+
 .privacy-footer {
   margin-top: auto;
   padding: 12px 16px;
   font-size: 13px;
-  color: #777;
+  color: #595959;
   text-align: center;
   flex-shrink: 0;
 }
@@ -52,15 +84,16 @@ a {
 .choice-btn {
   min-height: 48px;
   padding: 14px 20px;
-  border: 2px solid #ccc;
+  border: 2px solid #767676;
   border-radius: 12px;
   background: #fff;
   color: #222;
   text-align: center;
 }
 
-.choice-btn:active {
-  background: #eee;
+.choice-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .choice-btn.selected {
@@ -69,9 +102,24 @@ a {
   color: #fff;
 }
 
-.choice-btn:focus-visible {
+.choice-btn:focus-visible,
+.scale-option:focus-visible,
+.landing-card:focus-visible,
+.survey-back-link:focus-visible,
+.text-btn:focus-visible {
   outline: 3px solid #666;
   outline-offset: 2px;
+}
+
+.text-btn {
+  margin-top: 16px;
+  width: 100%;
+  padding: 12px;
+  background: none;
+  border: none;
+  color: #595959;
+  font-size: 16px;
+  border-radius: 8px;
 }
 
 /* Shared survey layout — optimized for landscape iPad kiosk */
@@ -90,9 +138,18 @@ a {
   justify-content: flex-start;
 }
 
+.survey-main--with-sticky {
+  padding-bottom: 130px;
+}
+
 .survey-card {
   border-radius: 12px;
   padding: 24px;
+}
+
+.survey-progress-wrap {
+  flex-shrink: 0;
+  margin-bottom: 4px;
 }
 
 .survey-progress {
@@ -172,7 +229,7 @@ a {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  border: 2px solid #999;
+  border: 2px solid #767676;
   flex-shrink: 0;
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
@@ -205,14 +262,15 @@ a {
 .scale-option-label-above {
   font-size: 12px;
   line-height: 1.2;
-  color: #888;
+  color: #595959;
   text-align: center;
   min-height: 1.3em;
   max-width: 76px;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  white-space: nowrap;
+  white-space: normal;
+  hyphens: auto;
 }
 
 .scale-grid-cell .scale-option-label-above {
@@ -256,7 +314,7 @@ a {
 
 .scale-grid-cell {
   background: #fff;
-  border: 1px solid #ddd;
+  border: 1px solid #767676;
   border-radius: 12px;
   padding: 16px;
   display: flex;
@@ -374,13 +432,23 @@ a {
   padding: 16px 48px;
   padding-bottom: calc(16px + env(safe-area-inset-bottom));
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   z-index: 10;
+}
+
+.sticky-bar-help {
+  margin: 0;
+  font-size: 14px;
+  color: #595959;
+  text-align: center;
+  max-width: 480px;
 }
 
 .sticky-bar--clinical {
   background: rgba(240, 240, 240, 0.95);
-  border-top: 1px solid #ddd;
+  border-top: 1px solid #767676;
 }
 
 .sticky-bar--warm {
@@ -460,7 +528,7 @@ a {
 
 .item-selection-thumb-text {
   font-size: 13px;
-  color: #888;
+  color: #595959;
   font-weight: 600;
 }
 
@@ -513,7 +581,7 @@ a {
 
 .product-header-thumb-text {
   font-size: 14px;
-  color: #888;
+  color: #595959;
   font-weight: 600;
 }
 
@@ -584,7 +652,7 @@ a {
   gap: 4px;
   padding: 20px 24px;
   background: #fff;
-  border: 2px solid #ccc;
+  border: 2px solid #767676;
   border-radius: 12px;
   text-decoration: none;
   min-height: 72px;
@@ -602,7 +670,7 @@ a {
 
 .landing-card--secondary {
   background: #f0f3f6;
-  border-color: #c5d0db;
+  border-color: #767676;
 }
 
 .landing-card--secondary .landing-card-label {
@@ -677,7 +745,7 @@ a {
 .recommender-note {
   margin: 0;
   font-size: 14px;
-  color: #777;
+  color: #595959;
   line-height: 1.45;
   font-style: italic;
 }
@@ -694,7 +762,7 @@ a {
   }
 
   .survey-main--with-sticky {
-    padding-bottom: 100px;
+    padding-bottom: 140px;
   }
 
   .survey-card {
@@ -790,6 +858,11 @@ a {
   .sticky-bar {
     padding: 20px 56px;
     padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+
+  .sticky-bar-help {
+    font-size: 15px;
+    max-width: 560px;
   }
 
   .sticky-bar-btn {

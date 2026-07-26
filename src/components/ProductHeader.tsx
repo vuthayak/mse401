@@ -1,19 +1,26 @@
+import type { ElementType } from 'react';
 import type { SurveyItem } from '../types/survey';
 
 interface ProductHeaderProps {
   item: SurveyItem;
   variant?: 'clinical' | 'warm';
+  headingLevel?: 1 | 2;
 }
 
-export function ProductHeader({ item, variant = 'clinical' }: ProductHeaderProps) {
+export function ProductHeader({
+  item,
+  variant = 'clinical',
+  headingLevel = 1,
+}: ProductHeaderProps) {
   const isClinical = variant === 'clinical';
+  const Heading: ElementType = headingLevel === 2 ? 'h2' : 'h1';
 
   return (
     <header
       className="product-header"
       style={{
         background: isClinical ? '#fff' : '#faf6f0',
-        borderColor: isClinical ? '#ddd' : '#e0d5c5',
+        borderColor: isClinical ? '#767676' : '#8a7f6e',
       }}
     >
       <div
@@ -28,7 +35,7 @@ export function ProductHeader({ item, variant = 'clinical' }: ProductHeaderProps
         )}
       </div>
       <div className="product-header-info">
-        <h1 className="product-header-name">{item.title}</h1>
+        <Heading className="product-header-name">{item.title}</Heading>
         <p className="product-header-tagline">{item.tagline}</p>
       </div>
     </header>
