@@ -4,6 +4,10 @@ import {
   fetchSurveyCInsights,
   type SurveyCInsightRow,
 } from '../../lib/fetchSurveyCInsights';
+import {
+  InsightsExportProvider,
+  useInsightsExport,
+} from './InsightsExportContext';
 
 type LoadState =
   | { status: 'loading' }
@@ -52,74 +56,93 @@ export function InsightsLayout() {
     };
   }, [refreshKey]);
 
+  const ready = state.status === 'ready';
+
   return (
-    <div className="app-shell insights-shell">
-      <header className="insights-header">
-        <div className="insights-header-text">
-          <p className="insights-eyebrow">Retailer insights</p>
-          <Link to="/insights" className="insights-title-link">
-            <h1 className="insights-title">Fitting Room Intelligence</h1>
-          </Link>
-          <p className="insights-subtitle">
-            Try-on behaviour, conversion, and lost revenue across the catalog.
-          </p>
-        </div>
-        <div className="insights-header-actions">
-          <button
-            type="button"
-            className="insights-refresh"
-            onClick={() => setRefreshKey((k) => k + 1)}
-            disabled={state.status === 'loading'}
-          >
-            Refresh
-          </button>
-          <Link to="/" className="insights-back">
-            ← Surveys
-          </Link>
-        </div>
-      </header>
-
-      <main className="insights-main">
-        {state.status === 'loading' ? (
-          <p className="insights-status">Loading Survey C responses…</p>
-        ) : null}
-
-        {state.status === 'skipped' ? (
-          <div className="insights-banner insights-banner--warn">
-            <strong>Supabase not configured.</strong> Add{' '}
-            <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>{' '}
-            to <code>.env.local</code>, then run{' '}
-            <code>supabase/add-survey-c-insights-rpc.sql</code>.
-          </div>
-        ) : null}
-
-        {state.status === 'error' ? (
-          <div className="insights-banner insights-banner--error">
-            <strong>Could not load insights.</strong> {state.message}
-            <p className="insights-banner-hint">
-              If the table exists but reads fail, run{' '}
-              <code>supabase/add-survey-c-insights-rpc.sql</code> in the SQL
-              Editor.
+    <InsightsExportProvider>
+      <div className="app-shell insights-shell">
+        <header className="insights-header">
+          <div className="insights-header-text">
+            <p className="insights-eyebrow">Retailer insights</p>
+            <Link to="/insights" className="insights-title-link">
+              <h1 className="insights-title">Fitting Room Intelligence</h1>
+            </Link>
+            <p className="insights-subtitle">
+              Try-on behaviour, conversion, and lost revenue across the catalog.
             </p>
           </div>
-        ) : null}
-
-        {state.status === 'empty' ? (
-          <div className="insights-banner">
-            No Survey C responses yet. Complete a survey or run the seed SQL.
+          <div className="insights-header-actions">
+            <InsightsExportButton enabled={ready} />
+            <button
+              type="button"
+              className="insights-refresh"
+              onClick={() => setRefreshKey((k) => k + 1)}
+              disabled={state.status === 'loading'}
+            >
+              Refresh
+            </button>
+            <Link to="/" className="insights-back">
+              ← Surveys
+            </Link>
           </div>
-        ) : null}
+        </header>
 
-        {state.status === 'ready' ? (
-          <RowsContext.Provider value={state.rows}>
-            <Outlet />
-          </RowsContext.Provider>
-        ) : null}
-      </main>
+        <main className="insights-main">
+          {state.status === 'loading' ? (
+            <p className="insights-status">Loading Survey C responses…</p>
+          ) : null}
 
-      <footer className="privacy-footer">
-        Anonymous fitting-room feedback — no personal data
-      </footer>
-    </div>
+          {state.status === 'skipped' ? (
+            <div className="insights-banner insights-banner--warn">
+              <strong>Supabase not configured.</strong> Add{' '}
+              <code>VITE_SUPABASE_URL</code> and{' '}
+              <code>VITE_SUPABASE_ANON_KEY</code> to <code>.env.local</code>,
+              then run <code>supabase/add-survey-c-insights-rpc.sql</code>.
+            </div>
+          ) : null}
+
+          {state.status === 'error' ? (
+            <div className="insights-banner insights-banner--error">
+              <strong>Could not load insights.</strong> {state.message}
+              <p className="insights-banner-hint">
+                If the table exists but reads fail, run{' '}
+                <code>supabase/add-survey-c-insights-rpc.sql</code> in the SQL
+                Editor.
+              </p>
+            </div>
+          ) : null}
+
+          {state.status === 'empty' ? (
+            <div className="insights-banner">
+              No Survey C responses yet. Complete a survey or run the seed SQL.
+            </div>
+          ) : null}
+
+          {state.status === 'ready' ? (
+            <RowsContext.Provider value={state.rows}>
+              <Outlet />
+            </RowsContext.Provider>
+          ) : null}
+        </main>
+
+        <footer className="privacy-footer">
+          Anonymous fitting-room feedback — no personal data
+        </footer>
+      </div>
+    </InsightsExportProvider>
+  );
+}
+
+function InsightsExportButton({ enabled }: { enabled: boolean }) {
+  const { canExport, runExport } = useInsightsExport();
+  return (
+    <button
+      type="button"
+      className="insights-refresh"
+      onClick={runExport}
+      disabled={!enabled || !canExport}
+    >
+      Export
+    </button>
   );
 }

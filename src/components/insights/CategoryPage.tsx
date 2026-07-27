@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   CATALOG_DEPTH_HEADINGS,
@@ -10,6 +10,11 @@ import {
   resolveCatalogPath,
   type CatalogNode,
 } from '../../lib/catalogTaxonomy';
+import {
+  buildCategoryExportSheets,
+  categoryExportFilename,
+  downloadInsightsWorkbook,
+} from '../../lib/exportInsights';
 import {
   INSIGHT_ATTRIBUTES,
   type SurveyCInsightRow,
@@ -25,6 +30,7 @@ import {
   summarizeItemSubset,
   type SubsetStats,
 } from '../../lib/surveyCInsights';
+import { useRegisterInsightsExport } from './InsightsExportContext';
 import { Kpi } from './Kpi';
 import { useInsightsRows } from './InsightsLayout';
 import { RatingBar } from './RatingBar';
@@ -164,6 +170,14 @@ export function CategoryPage() {
     }
     return map;
   }, [rows, node]);
+
+  const exportFn = useCallback(() => {
+    if (!path || path.length === 0) return;
+    const sheets = buildCategoryExportSheets(rows, path);
+    downloadInsightsWorkbook(sheets, categoryExportFilename(path));
+  }, [rows, path]);
+
+  useRegisterInsightsExport(path && path.length > 0 ? exportFn : null);
 
   if (!path || !node || !stats) {
     return (
