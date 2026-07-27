@@ -1,6 +1,5 @@
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo } from 'react';
 import {
-  DEFAULT_PERIOD,
   volumeOverTime,
   type InsightsPeriod,
   type VolumeSeries,
@@ -200,8 +199,15 @@ function ComboSvg({ series }: { series: VolumeSeries }) {
   );
 }
 
-export function TryOnVolumeChart({ rows }: { rows: SurveyCInsightRow[] }) {
-  const [period, setPeriod] = useState<InsightsPeriod>(DEFAULT_PERIOD);
+export function TryOnVolumeChart({
+  rows,
+  period,
+  onPeriodChange,
+}: {
+  rows: SurveyCInsightRow[];
+  period: InsightsPeriod;
+  onPeriodChange: (period: InsightsPeriod) => void;
+}) {
   const series = useMemo(() => volumeOverTime(rows, period), [rows, period]);
   const hasData = series.buckets.some((b) => b.tryOns > 0);
 
@@ -217,7 +223,7 @@ export function TryOnVolumeChart({ rows }: { rows: SurveyCInsightRow[] }) {
         </div>
         <PeriodSelector
           value={period}
-          onChange={setPeriod}
+          onChange={onPeriodChange}
           ariaLabel="Chart time period"
         />
       </div>

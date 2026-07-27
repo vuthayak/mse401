@@ -1,10 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CATALOG_TAXONOMY,
   catalogHref,
   leafItemIds,
 } from '../../lib/catalogTaxonomy';
+import {
+  buildHomeExportSheets,
+  downloadInsightsWorkbook,
+  homeExportFilename,
+} from '../../lib/exportInsights';
 import {
   DEFAULT_PERIOD,
   PERIOD_HINTS,
@@ -17,6 +22,7 @@ import {
 } from '../../lib/storeInsights';
 import { summarizeItemSubset } from '../../lib/surveyCInsights';
 import { Kpi } from './Kpi';
+import { useRegisterInsightsExport } from './InsightsExportContext';
 import { useInsightsRows } from './InsightsLayout';
 import { PeriodSelector } from './PeriodSelector';
 import { SkuPerformanceTable } from './SkuPerformanceTable';
@@ -26,6 +32,8 @@ export function InsightsHome() {
   const rows = useInsightsRows();
 
   const [execPeriod, setExecPeriod] = useState<InsightsPeriod>(DEFAULT_PERIOD);
+  const [chartPeriod, setChartPeriod] =
+    useState<InsightsPeriod>(DEFAULT_PERIOD);
   const [topPeriod, setTopPeriod] = useState<InsightsPeriod>(DEFAULT_PERIOD);
   const [worstPeriod, setWorstPeriod] =
     useState<InsightsPeriod>(DEFAULT_PERIOD);
@@ -50,6 +58,18 @@ export function InsightsHome() {
       })),
     [rows],
   );
+
+  const exportFn = useCallback(() => {
+    const sheets = buildHomeExportSheets(rows, {
+      execPeriod,
+      chartPeriod,
+      topPeriod,
+      worstPeriod,
+    });
+    downloadInsightsWorkbook(sheets, homeExportFilename());
+  }, [rows, execPeriod, chartPeriod, topPeriod, worstPeriod]);
+
+  useRegisterInsightsExport(exportFn);
 
   return (
     <>
@@ -98,7 +118,11 @@ export function InsightsHome() {
           unit.
         </p>
 
-        <TryOnVolumeChart rows={rows} />
+        <TryOnVolumeChart
+          rows={rows}
+          period={chartPeriod}
+          onPeriodChange={setChartPeriod}
+        />
       </section>
 
       <section className="insights-zone" aria-labelledby="zone-cats">
