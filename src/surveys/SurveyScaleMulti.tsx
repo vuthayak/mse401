@@ -4,11 +4,14 @@ import { ItemSelection } from '../components/ItemSelection';
 import { ProductHeader } from '../components/ProductHeader';
 import {
   RecommenderScreen,
+  sizeOptionsFromOutcome,
   type RecommenderState,
+  type SizeOptionsState,
 } from '../components/RecommenderScreen';
 import { ResponsePreview } from '../components/ResponsePreview';
 import { SaveStatus } from '../components/SaveStatus';
 import { ScaleAxisPanel } from '../components/ScaleAxisPanel';
+import { fetchSizeOptions } from '../lib/fetchSizeOptions';
 import { persistSurveyCResponse, type PersistOutcome } from '../lib/persistSurvey';
 import { fetchRecommendations } from '../lib/recommendItem';
 import { getSessionToken, resetSession } from '../lib/session';
@@ -92,10 +95,14 @@ export function SurveyScaleMulti({
   const [saveOutcome, setSaveOutcome] = useState<PersistOutcome | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
   const [recommender, setRecommender] = useState<RecommenderState | null>(null);
+  const [sizeOptions, setSizeOptions] = useState<SizeOptionsState>({
+    status: 'loading',
+  });
   const stepHeadingRef = useRef<HTMLElement | null>(null);
   const prevRatingsComplete = useRef(false);
   // Abandoned when the shopper starts over mid-request.
   const recommenderRequest = useRef<AbortController | null>(null);
+  const sizeOptionsRequest = useRef<AbortController | null>(null);
 
   const ratingsComplete = isScaleRatingsComplete(ratings);
   const missingLabels = SURVEY_A_AXES.filter(
@@ -157,14 +164,18 @@ export function SurveyScaleMulti({
 
     if (decision === 'NO') {
       // Show the result screen immediately and stream the alternatives in, so a
-      // cold API host does not leave the shopper on a blank step.
+      // cold API host does not leave the shopper on a blank step. Size options
+      // come from Supabase in parallel and usually land first.
       setRecommender({ status: 'loading' });
+      setSizeOptions({ status: 'loading' });
       setStep('result');
       void loadRecommendations(record);
+      void loadSizeOptions(record);
       return;
     }
 
     setRecommender(null);
+    setSizeOptions({ status: 'loading' });
     setStep('result');
   };
 
@@ -208,19 +219,42 @@ export function SurveyScaleMulti({
     });
   };
 
+  const loadSizeOptions = async (record: SurveyCResponse) => {
+    sizeOptionsRequest.current?.abort();
+    const controller = new AbortController();
+    sizeOptionsRequest.current = controller;
+
+    const outcome = await fetchSizeOptions({
+      surveyItemId: record.selected_item,
+      signal: controller.signal,
+    });
+
+    if (controller.signal.aborted) return;
+    setSizeOptions(sizeOptionsFromOutcome(outcome));
+  };
+
   const handleStartOver = () => {
     recommenderRequest.current?.abort();
     recommenderRequest.current = null;
+    sizeOptionsRequest.current?.abort();
+    sizeOptionsRequest.current = null;
     resetSession();
     setSelectedItem(null);
     setRatings({});
     setResponse(null);
     setSaveOutcome(null);
     setRecommender(null);
+    setSizeOptions({ status: 'loading' });
     setStep('items');
   };
 
-  useEffect(() => () => recommenderRequest.current?.abort(), []);
+  useEffect(
+    () => () => {
+      recommenderRequest.current?.abort();
+      sizeOptionsRequest.current?.abort();
+    },
+    [],
+  );
 
   if (step === 'result' && response && selectedItem && recommender) {
     return (
@@ -228,6 +262,8 @@ export function SurveyScaleMulti({
         variant={recommenderVariant}
         originalItem={selectedItem}
         state={recommender}
+        sizeOptions={sizeOptions}
+        sessionToken={response.session_token}
         saveOutcome={saveOutcome}
         onStartOver={handleStartOver}
         stepHeadingRef={stepHeadingRef}

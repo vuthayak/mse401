@@ -1,13 +1,20 @@
-import { useEffect, type Ref } from 'react';
+import { useCallback, useEffect, useState, type Ref } from 'react';
 import { Link } from 'react-router-dom';
 import { ProductHeader } from './ProductHeader';
+import {
+  RequestItemButton,
+  type RequestButtonStatus,
+} from './RequestItemButton';
 import { SaveStatus } from './SaveStatus';
+import { SizeRequestPanel } from './SizeRequestPanel';
 import type { PersistOutcome } from '../lib/persistSurvey';
 import {
   catalogImageUrl,
   type RecommendationResult,
   type RecommendedItem,
 } from '../lib/recommendItem';
+import { persistItemRequest, type ItemRequestKind } from '../lib/itemRequests';
+import type { SizeOption, SizeOptionsOutcome } from '../lib/fetchSizeOptions';
 import type { SurveyItem } from '../types/survey';
 
 export type RecommenderState =
@@ -15,10 +22,27 @@ export type RecommenderState =
   | { status: 'ready'; result: RecommendationResult }
   | { status: 'empty'; message: string };
 
+export type SizeOptionsState =
+  | { status: 'loading' }
+  | { status: 'ready'; options: SizeOption[] }
+  | { status: 'empty' }
+  | { status: 'unavailable' }
+  | { status: 'error'; message: string };
+
+interface CompletedRequest {
+  title: string;
+  size: string;
+  requestKind: ItemRequestKind;
+  imagePath: string;
+  tagline: string;
+}
+
 interface RecommenderScreenProps {
   variant: 'clinical' | 'warm';
   originalItem: SurveyItem;
   state: RecommenderState;
+  sizeOptions: SizeOptionsState;
+  sessionToken: string;
   saveOutcome: PersistOutcome | null;
   onStartOver: () => void;
   stepHeadingRef?: Ref<HTMLElement | null>;
@@ -32,10 +56,72 @@ const priceFormatter = new Intl.NumberFormat('en-CA', {
   maximumFractionDigits: 2,
 });
 
+function useItemRequests(sessionToken: string, sourceSurveyItemId: string) {
+  const [statuses, setStatuses] = useState<Record<string, RequestButtonStatus>>({});
+  const [announce, setAnnounce] = useState('');
+  const [completedRequest, setCompletedRequest] = useState<CompletedRequest | null>(
+    null,
+  );
+
+  const requestItem = useCallback(
+    async (params: {
+      variationId: string;
+      size: string;
+      requestKind: ItemRequestKind;
+      title: string;
+      imagePath: string;
+      tagline: string;
+    }) => {
+      const { variationId, size, requestKind, title, imagePath, tagline } = params;
+      setStatuses((prev) => ({ ...prev, [variationId]: 'saving' }));
+      const outcome = await persistItemRequest({
+        sessionToken,
+        sourceSurveyItemId,
+        variationId,
+        size,
+        requestKind,
+      });
+
+      if (outcome.status === 'saved' || outcome.status === 'skipped') {
+        setStatuses((prev) => ({ ...prev, [variationId]: 'done' }));
+        setCompletedRequest({ title, size, requestKind, imagePath, tagline });
+        setAnnounce(
+          outcome.status === 'skipped'
+            ? `Request recorded locally for ${title} in size ${size}.`
+            : `Request confirmed: ${title} in size ${size}.`,
+        );
+        return;
+      }
+
+      setStatuses((prev) => ({ ...prev, [variationId]: 'error' }));
+      setAnnounce(`Could not request ${title}. Try again.`);
+    },
+    [sessionToken, sourceSurveyItemId],
+  );
+
+  return { statuses, announce, completedRequest, requestItem };
+}
+
+export function sizeOptionsFromOutcome(
+  outcome: SizeOptionsOutcome,
+): SizeOptionsState {
+  if (outcome.status === 'ok') {
+    return outcome.options.length > 0
+      ? { status: 'ready', options: outcome.options }
+      : { status: 'empty' };
+  }
+  if (outcome.status === 'unavailable') {
+    return { status: 'unavailable' };
+  }
+  return { status: 'error', message: outcome.message };
+}
+
 export function RecommenderScreen({
   variant,
   originalItem,
   state,
+  sizeOptions,
+  sessionToken,
   saveOutcome,
   onStartOver,
   stepHeadingRef,
@@ -44,17 +130,38 @@ export function RecommenderScreen({
 }: RecommenderScreenProps) {
   const isClinical = variant === 'clinical';
   const borderColor = isClinical ? '#767676' : '#8a7f6e';
+  const { statuses, announce, completedRequest, requestItem } = useItemRequests(
+    sessionToken,
+    originalItem.id,
+  );
+  const isConfirmed = completedRequest !== null;
 
   useEffect(() => {
-    document.title = 'Recommendation — Survey';
-  }, []);
+    document.title = isConfirmed ? 'Request confirmed — Survey' : 'Recommendation — Survey';
+  }, [isConfirmed]);
 
-  const subtitle =
-    state.status === 'loading'
+  useEffect(() => {
+    if (!isConfirmed) return;
+    requestAnimationFrame(() => {
+      const heading =
+        typeof stepHeadingRef === 'function'
+          ? null
+          : stepHeadingRef?.current;
+      heading?.focus();
+    });
+  }, [isConfirmed, stepHeadingRef]);
+
+  const subtitle = isConfirmed
+    ? 'Staff will bring it to this fitting room. You are all set — no need to rate again.'
+    : state.status === 'loading'
       ? `Checking what else is in stock after your notes on ${originalItem.title}…`
       : state.status === 'ready'
-        ? `Based on your feedback about ${originalItem.title}, here is what the fitting room has in stock.`
-        : `We could not pull alternatives for ${originalItem.title} right now.`;
+        ? `Based on your feedback about ${originalItem.title}, here is what the fitting room has in stock. Request a size or an alternative to this room.`
+        : `We could not pull alternatives for ${originalItem.title} right now. You can still request a different size below if one is available.`;
+
+  const liveMessage = isConfirmed
+    ? announce || 'Request confirmed'
+    : `${statusMessage}${announce ? ` ${announce}` : ''}`;
 
   return (
     <div className="app-shell" style={{ background: isClinical ? '#eef2f6' : '#f5efe6' }}>
@@ -62,9 +169,9 @@ export function RecommenderScreen({
         Skip to main content
       </a>
       <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
-        {statusMessage}
+        {liveMessage}
       </div>
-      <main id="main-content" className="survey-main survey-main--fill" tabIndex={-1}>
+      <main id="main-content" className="survey-main survey-main--fill survey-main--wide" tabIndex={-1}>
         <div className="survey-progress-wrap">
           <p className="survey-step-label" aria-hidden="true">
             Step {progressNow} of 3
@@ -89,9 +196,11 @@ export function RecommenderScreen({
 
         <div className="recommender-header">
           <span className="recommender-badge">
-            {state.status === 'ready' && state.result.items.length > 1
-              ? 'Alternatives'
-              : 'Recommendation'}
+            {isConfirmed
+              ? 'Requested'
+              : state.status === 'ready' && state.result.items.length > 1
+                ? 'Alternatives'
+                : 'Recommendation'}
           </span>
           <h1
             ref={(el) => {
@@ -104,45 +213,93 @@ export function RecommenderScreen({
             className="recommender-title"
             tabIndex={-1}
           >
-            {state.status === 'loading'
-              ? 'Finding your alternatives'
-              : state.status === 'ready'
-                ? 'We found something you might like'
-                : 'No alternatives available'}
+            {isConfirmed
+              ? 'Requested to your room'
+              : state.status === 'loading'
+                ? 'Finding your alternatives'
+                : state.status === 'ready'
+                  ? 'We found something you might like'
+                  : 'No alternatives available'}
           </h1>
           <p className="recommender-subtitle">{subtitle}</p>
         </div>
 
         <SaveStatus outcome={saveOutcome} />
 
-        {state.status === 'loading' && <RecommenderSkeleton borderColor={borderColor} />}
+        {isConfirmed && completedRequest ? (
+          <RequestConfirmation
+            request={completedRequest}
+            isClinical={isClinical}
+            borderColor={borderColor}
+          />
+        ) : (
+          <>
+            {sizeOptions.status === 'ready' && (
+              <SizeRequestPanel
+                options={sizeOptions.options}
+                statuses={statuses}
+                onRequest={(option) =>
+                  void requestItem({
+                    variationId: option.variationId,
+                    size: option.size,
+                    requestKind: 'size_swap',
+                    title: option.title,
+                    imagePath: option.imagePath,
+                    tagline: `${option.brand} · ${option.colorLabel}`,
+                  })
+                }
+                isClinical={isClinical}
+                borderColor={borderColor}
+              />
+            )}
 
-        {state.status === 'empty' && (
-          <div
-            className="recommender-card survey-card"
-            style={{
-              background: isClinical ? '#fff' : '#faf6f0',
-              border: `1px solid ${borderColor}`,
-            }}
-          >
-            <p className="recommender-note">{state.message}</p>
-          </div>
-        )}
+            {sizeOptions.status === 'error' && (
+              <p className="recommender-note">
+                Size options are unavailable right now ({sizeOptions.message}).
+              </p>
+            )}
 
-        {state.status === 'ready' && (
-          <ul className="recommender-list">
-            {state.result.items.map((item, index) => (
-              <li key={item.itemId}>
-                <RecommendationCard
-                  item={item}
-                  rank={index + 1}
-                  showRank={state.result.items.length > 1}
-                  isClinical={isClinical}
-                  borderColor={borderColor}
-                />
-              </li>
-            ))}
-          </ul>
+            {state.status === 'loading' && <RecommenderSkeleton borderColor={borderColor} />}
+
+            {state.status === 'empty' && (
+              <div
+                className="recommender-card survey-card"
+                style={{
+                  background: isClinical ? '#fff' : '#faf6f0',
+                  border: `1px solid ${borderColor}`,
+                }}
+              >
+                <p className="recommender-note">{state.message}</p>
+              </div>
+            )}
+
+            {state.status === 'ready' && (
+              <ul className="recommender-list">
+                {state.result.items.map((item, index) => (
+                  <li key={item.itemId}>
+                    <RecommendationCard
+                      item={item}
+                      rank={index + 1}
+                      showRank={state.result.items.length > 1}
+                      isClinical={isClinical}
+                      borderColor={borderColor}
+                      requestStatus={statuses[item.itemId] ?? 'idle'}
+                      onRequest={() =>
+                        void requestItem({
+                          variationId: item.itemId,
+                          size: item.size,
+                          requestKind: 'recommendation',
+                          title: item.title,
+                          imagePath: item.imagePath,
+                          tagline: `${item.brand} · ${item.colorLabel} · ${item.materialLabel}`,
+                        })
+                      }
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
 
         <button
@@ -164,18 +321,68 @@ export function RecommenderScreen({
   );
 }
 
+function RequestConfirmation({
+  request,
+  isClinical,
+  borderColor,
+}: {
+  request: CompletedRequest;
+  isClinical: boolean;
+  borderColor: string;
+}) {
+  const productItem: SurveyItem = {
+    id: 'requested',
+    title: request.title,
+    tagline: request.tagline,
+    imageUrl: catalogImageUrl(request.imagePath),
+  };
+
+  const kindLabel =
+    request.requestKind === 'size_swap'
+      ? 'Different size of the item you tried on'
+      : 'Recommended alternative';
+
+  return (
+    <section
+      className="request-confirmation survey-card"
+      style={{
+        background: isClinical ? '#fff' : '#faf6f0',
+        border: `1px solid ${borderColor}`,
+      }}
+      aria-labelledby="request-confirmation-detail"
+    >
+      <p className="request-confirmation-kind">{kindLabel}</p>
+      <ProductHeader
+        item={productItem}
+        variant={isClinical ? 'clinical' : 'warm'}
+        headingLevel={2}
+      />
+      <p id="request-confirmation-detail" className="request-confirmation-detail">
+        {request.title} · Size {request.size}
+      </p>
+      <p className="request-confirmation-note">
+        A staff member will bring this to your room shortly.
+      </p>
+    </section>
+  );
+}
+
 function RecommendationCard({
   item,
   rank,
   showRank,
   isClinical,
   borderColor,
+  requestStatus,
+  onRequest,
 }: {
   item: RecommendedItem;
   rank: number;
   showRank: boolean;
   isClinical: boolean;
   borderColor: string;
+  requestStatus: RequestButtonStatus;
+  onRequest: () => void;
 }) {
   const productItem: SurveyItem = {
     id: item.itemId,
@@ -208,26 +415,35 @@ function RecommendationCard({
           <li key={reason}>{reason}</li>
         ))}
       </ul>
+      <RequestItemButton
+        status={requestStatus}
+        onClick={onRequest}
+        label={`Request the ${item.title} in size ${item.size}`}
+      />
     </div>
   );
 }
 
 function RecommenderSkeleton({ borderColor }: { borderColor: string }) {
   return (
-    <div
-      className="recommender-card survey-card recommender-skeleton"
-      style={{ border: `1px dashed ${borderColor}` }}
-      aria-hidden="true"
-    >
-      <div className="recommender-skeleton-row">
-        <span className="recommender-skeleton-thumb" />
-        <span className="recommender-skeleton-lines">
+    <div className="recommender-skeleton-grid" aria-hidden="true">
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="recommender-card survey-card recommender-skeleton"
+          style={{ border: `1px dashed ${borderColor}` }}
+        >
+          <div className="recommender-skeleton-row">
+            <span className="recommender-skeleton-thumb" />
+            <span className="recommender-skeleton-lines">
+              <span className="recommender-skeleton-line" />
+              <span className="recommender-skeleton-line recommender-skeleton-line--short" />
+            </span>
+          </div>
           <span className="recommender-skeleton-line" />
           <span className="recommender-skeleton-line recommender-skeleton-line--short" />
-        </span>
-      </div>
-      <span className="recommender-skeleton-line" />
-      <span className="recommender-skeleton-line recommender-skeleton-line--short" />
+        </div>
+      ))}
     </div>
   );
 }
