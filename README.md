@@ -145,7 +145,7 @@ That creates `survey_a_responses`, `survey_b_responses`, and `survey_c_responses
 
 If A and B already exist and you only need Survey C, run [`supabase/add-survey-c-table.sql`](supabase/add-survey-c-table.sql) instead.
 
-Then run [`supabase/add-survey-c-insights-rpc.sql`](supabase/add-survey-c-insights-rpc.sql) so the `/insights` dashboard can load rows (without exposing `session_token`).
+Then run [`supabase/add-survey-c-insights-rpc.sql`](supabase/add-survey-c-insights-rpc.sql), then [`supabase/add-insights-aggregates.sql`](supabase/add-insights-aggregates.sql) so `/insights` loads **day × item × intent aggregates** (no individual responses) for the anon key. Also run [`supabase/add-retention-policy.sql`](supabase/add-retention-policy.sql) for 24-hour session-token purge.
 
 ### 2. Seed Survey C (optional)
 
@@ -331,7 +331,7 @@ zip -r mse401-fitting-room-surveys.zip mse401 \
 
 ## Privacy note
 
-This prototype uses an in-memory anonymous session UUID only. It does not collect names, emails, or other PII. A footer on each screen states: *"Anonymous session — no personal data collected."*
+This prototype uses an in-memory anonymous session UUID only. It does not collect names, emails, or other PII. Session linkage on stored survey rows is purged after 24 hours (see `supabase/add-retention-policy.sql`). A footer on each screen states: *"Anonymous session — no personal data collected."* See [PRIVACY.md](PRIVACY.md) for the full notice.
 
 ## Tech stack
 

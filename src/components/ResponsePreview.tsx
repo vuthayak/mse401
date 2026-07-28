@@ -9,11 +9,20 @@ interface ResponsePreviewProps {
   record: SurveyAResponse | SurveyBResponse | SurveyCResponse;
 }
 
+function publicRecord(
+  record: SurveyAResponse | SurveyBResponse | SurveyCResponse,
+): Record<string, unknown> {
+  const copy: Record<string, unknown> = { ...record };
+  delete copy.session_token;
+  delete copy.id;
+  return copy;
+}
+
 export function ResponsePreview({ record }: ResponsePreviewProps) {
   return (
     <div style={styles.wrapper}>
       <h2 style={styles.heading}>Survey Response</h2>
-      <pre style={styles.pre}>{JSON.stringify(record, null, 2)}</pre>
+      <pre style={styles.pre}>{JSON.stringify(publicRecord(record), null, 2)}</pre>
     </div>
   );
 }

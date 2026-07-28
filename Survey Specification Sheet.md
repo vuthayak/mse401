@@ -31,7 +31,7 @@ To maximize response flexibility while keeping interaction time under 20 seconds
 ## 2. Core Architectural Context + System Constraints
 
 - **Target Interface:** Inline micro-survey module pinned to individual product layout cards within an interactive, scrollable list layout. Survey inputs are isolated and evaluated independently per scanned item.
-- **Data Privacy Compliance (PIPEDA):** In strict compliance with the *Personal Information Protection and Electronic Documents Act (PIPEDA)*, the generated survey text and backend tracking engines must never collect, request, or store Personally Identifiable Information (PII). Data packets are keyed entirely to an anonymous, ephemeral session UUID held in temporary cache memory, which is completely purged after 10 minutes of stall inactivity or upon room clearance.
+- **Data Privacy Compliance (PIPEDA):** In strict compliance with the *Personal Information Protection and Electronic Documents Act (PIPEDA)*, the generated survey text and backend tracking engines must never collect, request, or store Personally Identifiable Information (PII). Data packets are keyed entirely to an anonymous session UUID held in temporary memory. Session linkage (`session_token`) is purged from persisted survey rows after **24 hours**; the kiosk memory token is cleared on Start Over or page reload. No names, emails, demographics, free text, or photos are collected.
 
 ## 3. Methodological Survey Rules
 

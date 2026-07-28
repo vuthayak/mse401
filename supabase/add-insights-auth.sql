@@ -1,11 +1,10 @@
--- Read path for the retailer insights dashboard.
--- Returns Survey C rows without session_token (no direct table SELECT for anon).
--- Run in Supabase → SQL Editor after survey_c_responses exists.
+-- DEPRECATED for the demo path.
+-- Prefer add-insights-aggregates.sql, which returns day/item/intent aggregates
+-- and grants execute to anon (no retailer login).
 --
--- IMPORTANT: After this file, run add-insights-aggregates.sql so the dashboard
--- receives day/item/intent aggregates only (no per-response rows) and anon
--- can call the RPC for the public demo. Do not leave the per-response
--- shape from this file as the live function in production demos.
+-- This file locked insights behind Supabase Auth and coarsened timestamps to
+-- the hour while still returning one row per survey response. Keep only if you
+-- intentionally want authenticated access to per-response rows.
 
 create or replace function public.get_survey_c_insights_rows()
 returns table (
@@ -24,7 +23,7 @@ set search_path = public
 as $$
   select
     r.id,
-    r.created_at,
+    date_trunc('hour', r.created_at) as created_at,
     r.selected_item,
     r.fabric,
     r.fit,
@@ -36,5 +35,5 @@ as $$
 $$;
 
 revoke all on function public.get_survey_c_insights_rows() from public;
-grant execute on function public.get_survey_c_insights_rows() to anon;
+revoke execute on function public.get_survey_c_insights_rows() from anon;
 grant execute on function public.get_survey_c_insights_rows() to authenticated;

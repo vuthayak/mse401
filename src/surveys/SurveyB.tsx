@@ -53,6 +53,7 @@ export function SurveyB() {
     if (!selectedItem || !intent || !isBinaryRatingsComplete(ratings)) return;
 
     const record: SurveyBResponse = {
+      id: crypto.randomUUID(),
       session_token: getSessionToken(),
       selected_item: selectedItem.id,
       intent,

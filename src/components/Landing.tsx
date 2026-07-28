@@ -1,7 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { PrivacyNotice } from './PrivacyNotice';
 
 export function Landing() {
+  const [acknowledged, setAcknowledged] = useState(false);
+
   useEffect(() => {
     document.title = 'Fitting Room Surveys';
   }, []);
@@ -14,22 +17,30 @@ export function Landing() {
       <main id="main-content" className="landing-main" tabIndex={-1}>
         <h1 className="landing-title">Fitting Room Surveys</h1>
         <p className="landing-subtitle">
-          Micro-survey for iPad kiosk prototypes. Tap below to start.
+          Micro-survey for iPad kiosk prototypes. Acknowledge the privacy notice
+          to continue.
         </p>
-        <nav className="landing-nav landing-nav--split" aria-label="Survey and insights">
-          <Link to="/survey-c" className="landing-card">
-            <span className="landing-card-label">Start Survey</span>
-            <span className="landing-card-desc">
-              Pick an item, rate four attributes, then confirm purchase intent
-            </span>
-          </Link>
-          <Link to="/insights" className="landing-card landing-card--secondary">
-            <span className="landing-card-label">Product Insights</span>
-            <span className="landing-card-desc">
-              Retailer view of Survey C ratings, purchase intent, and friction
-            </span>
-          </Link>
-        </nav>
+        {!acknowledged ? (
+          <PrivacyNotice onAcknowledge={() => setAcknowledged(true)} />
+        ) : (
+          <nav
+            className="landing-nav landing-nav--split"
+            aria-label="Survey and insights"
+          >
+            <Link to="/survey-c" className="landing-card">
+              <span className="landing-card-label">Start Survey</span>
+              <span className="landing-card-desc">
+                Pick an item, rate four attributes, then confirm purchase intent
+              </span>
+            </Link>
+            <Link to="/insights" className="landing-card landing-card--secondary">
+              <span className="landing-card-label">Product Insights</span>
+              <span className="landing-card-desc">
+                Retailer view of Survey C ratings, purchase intent, and friction
+              </span>
+            </Link>
+          </nav>
+        )}
       </main>
       <footer className="privacy-footer">
         Anonymous session — no personal data collected

@@ -15,6 +15,7 @@ import { fetchSizeOptions } from '../lib/fetchSizeOptions';
 import { persistSurveyCResponse, type PersistOutcome } from '../lib/persistSurvey';
 import { fetchRecommendations } from '../lib/recommendItem';
 import { getSessionToken, resetSession } from '../lib/session';
+import { isOnline } from '../lib/withRetry';
 import {
   SURVEY_A_AXES,
   INTENT_STEM,
@@ -93,6 +94,7 @@ export function SurveyScaleMulti({
   const [response, setResponse] = useState<SurveyCResponse | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveOutcome, setSaveOutcome] = useState<PersistOutcome | null>(null);
+  const [online, setOnline] = useState(isOnline);
   const [statusMessage, setStatusMessage] = useState('');
   const [recommender, setRecommender] = useState<RecommenderState | null>(null);
   const [sizeOptions, setSizeOptions] = useState<SizeOptionsState>({
@@ -132,6 +134,16 @@ export function SurveyScaleMulti({
     prevRatingsComplete.current = ratingsComplete;
   }, [ratingsComplete, step]);
 
+  useEffect(() => {
+    const sync = () => setOnline(isOnline());
+    window.addEventListener('online', sync);
+    window.addEventListener('offline', sync);
+    return () => {
+      window.removeEventListener('online', sync);
+      window.removeEventListener('offline', sync);
+    };
+  }, []);
+
   const handleItemSelect = (item: SurveyItem) => {
     setSelectedItem(item);
     setRatings({});
@@ -146,6 +158,7 @@ export function SurveyScaleMulti({
     if (!selectedItem || !isScaleRatingsComplete(ratings)) return;
 
     const record: SurveyCResponse = {
+      id: crypto.randomUUID(),
       session_token: getSessionToken(),
       selected_item: selectedItem.id,
       fabric: ratings.fabric,
@@ -157,10 +170,10 @@ export function SurveyScaleMulti({
 
     setSaving(true);
     setSaveOutcome(null);
+    setResponse(record);
     const outcome = await persistSurveyCResponse(record);
     setSaveOutcome(outcome);
     setSaving(false);
-    setResponse(record);
 
     if (decision === 'NO') {
       // Show the result screen immediately and stream the alternatives in, so a
@@ -177,6 +190,15 @@ export function SurveyScaleMulti({
     setRecommender(null);
     setSizeOptions({ status: 'loading' });
     setStep('result');
+  };
+
+  const handleRetrySave = async () => {
+    if (!response || saving) return;
+    setSaving(true);
+    setSaveOutcome(null);
+    const outcome = await persistSurveyCResponse(response);
+    setSaveOutcome(outcome);
+    setSaving(false);
   };
 
   const loadRecommendations = async (record: SurveyCResponse) => {
@@ -265,6 +287,9 @@ export function SurveyScaleMulti({
         sizeOptions={sizeOptions}
         sessionToken={response.session_token}
         saveOutcome={saveOutcome}
+        saving={saving}
+        onRetrySave={handleRetrySave}
+        retryDisabled={!online}
         onStartOver={handleStartOver}
         stepHeadingRef={stepHeadingRef}
         statusMessage={statusMessage}
@@ -289,7 +314,14 @@ export function SurveyScaleMulti({
           >
             Survey complete
           </h2>
-          <SaveStatus outcome={saveOutcome} />
+          <SaveStatus
+            outcome={saveOutcome}
+            saving={saving}
+            onRetry={
+              saveOutcome?.status === 'error' ? handleRetrySave : undefined
+            }
+            retryDisabled={!online}
+          />
           <ResponsePreview record={response} />
           <button
             type="button"

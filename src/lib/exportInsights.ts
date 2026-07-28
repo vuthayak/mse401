@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import {
   CATALOG_DEPTH_HEADINGS,
   CATALOG_LEVEL_PLURAL,
@@ -426,36 +425,45 @@ export function buildCategoryExportSheets(
   return sheets;
 }
 
-/** Sanitize Excel sheet names (max 31 chars, no specials). */
-function safeSheetName(name: string, used: Set<string>): string {
-  let base = name.replace(/[:\\/?*[\]]/g, '-').slice(0, 31);
-  if (!base) base = 'Sheet';
-  let candidate = base;
-  let i = 2;
-  while (used.has(candidate)) {
-    const suffix = ` (${i})`;
-    candidate = `${base.slice(0, 31 - suffix.length)}${suffix}`;
-    i += 1;
+/** Escape a cell for RFC 4180 CSV. */
+function csvCell(value: string | number): string {
+  const text = String(value);
+  if (/[",\r\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
   }
-  used.add(candidate);
-  return candidate;
+  return text;
 }
 
+function sheetToCsv(sheet: ExportSheet): string {
+  const lines = sheet.rows.map((row) => row.map(csvCell).join(','));
+  return [`# ${sheet.name}`, ...lines].join('\r\n');
+}
+
+/**
+ * Download insights as a single CSV (one section per sheet).
+ * Replaces the abandoned `xlsx` package to avoid known prototype-pollution advisories.
+ */
 export function downloadInsightsWorkbook(
   sheets: ExportSheet[],
   filename: string,
 ): void {
-  const wb = XLSX.utils.book_new();
-  const used = new Set<string>();
-  for (const sheet of sheets) {
-    const ws = XLSX.utils.aoa_to_sheet(sheet.rows);
-    XLSX.utils.book_append_sheet(wb, ws, safeSheetName(sheet.name, used));
-  }
-  XLSX.writeFile(wb, filename);
+  const body = sheets.map(sheetToCsv).join('\r\n\r\n');
+  const blob = new Blob([body], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename.endsWith('.csv')
+    ? filename
+    : filename.replace(/\.xlsx$/i, '.csv');
+  anchor.rel = 'noopener';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function homeExportFilename(now = new Date()): string {
-  return `fitting-room-insights-${now.toISOString().slice(0, 10)}.xlsx`;
+  return `fitting-room-insights-${now.toISOString().slice(0, 10)}.csv`;
 }
 
 export function categoryExportFilename(
@@ -463,5 +471,5 @@ export function categoryExportFilename(
   now = new Date(),
 ): string {
   const slug = path.map((n) => n.id).join('-') || 'category';
-  return `fitting-room-insights-${slug}-${now.toISOString().slice(0, 10)}.xlsx`;
+  return `fitting-room-insights-${slug}-${now.toISOString().slice(0, 10)}.csv`;
 }

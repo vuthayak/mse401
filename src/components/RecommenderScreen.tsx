@@ -44,6 +44,9 @@ interface RecommenderScreenProps {
   sizeOptions: SizeOptionsState;
   sessionToken: string;
   saveOutcome: PersistOutcome | null;
+  saving?: boolean;
+  onRetrySave?: () => void;
+  retryDisabled?: boolean;
   onStartOver: () => void;
   stepHeadingRef?: Ref<HTMLElement | null>;
   statusMessage?: string;
@@ -123,6 +126,9 @@ export function RecommenderScreen({
   sizeOptions,
   sessionToken,
   saveOutcome,
+  saving = false,
+  onRetrySave,
+  retryDisabled,
   onStartOver,
   stepHeadingRef,
   statusMessage = '',
@@ -224,7 +230,14 @@ export function RecommenderScreen({
           <p className="recommender-subtitle">{subtitle}</p>
         </div>
 
-        <SaveStatus outcome={saveOutcome} />
+        <SaveStatus
+          outcome={saveOutcome}
+          saving={saving}
+          onRetry={
+            saveOutcome?.status === 'error' ? onRetrySave : undefined
+          }
+          retryDisabled={retryDisabled}
+        />
 
         {isConfirmed && completedRequest ? (
           <RequestConfirmation

@@ -123,9 +123,9 @@ To calculate structural item similarity for substitute recommendations, candidat
 
 To comply fully with PIPEDA (Personal Information Protection and Electronic Documents Act) and standard data privacy practices:
 
-* Interaction data is keyed strictly to an ephemeral session token, `Fitting_Room_ID`, and a UTC `Timestamp`.
+* Interaction data is keyed strictly to an ephemeral session token and a UTC timestamp (coarsened to the hour for retailer analytics).
 * No Personally Identifiable Information (PII) or shopper profiles are captured or linked.
-* Session states auto-expire and purge from temporary memory following **10 minutes of inactivity** or an explicit reset trigger by a room attendant.
+* Session linkage (`session_token`) is purged from persisted survey rows after **24 hours**. The in-memory kiosk token is cleared on Start Over or page reload. Item-request rows used for staff fulfillment are deleted after **7 days**.
 
 ---
 
@@ -148,7 +148,7 @@ Build the prompt constructor in FastAPI to pass filtered candidate pools, Likert
 
 
 5. **Milestone 5: Privacy Audit & Edge Optimization:** Deployment Readiness.
-Implement automatic TTL session expiration in Supabase. Conduct data audits to verify zero PII persistence and validate end-to-end response latency (< 5 seconds).
+Implement automatic session-token retention purge in Supabase (24-hour null-out of `session_token`, 7-day deletion of `item_requests`). Conduct data audits to verify zero PII persistence and validate end-to-end response latency (< 5 seconds).
 
 
 ---

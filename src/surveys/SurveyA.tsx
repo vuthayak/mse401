@@ -57,6 +57,7 @@ export function SurveyA() {
     if (!selectedItem || !isScaleRatingsComplete(ratings)) return;
 
     const record: SurveyAResponse = {
+      id: crypto.randomUUID(),
       session_token: getSessionToken(),
       selected_item: selectedItem.id,
       fabric: ratings.fabric,

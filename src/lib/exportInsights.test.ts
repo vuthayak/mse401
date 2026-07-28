@@ -8,25 +8,39 @@ import {
   periodLabel,
 } from './exportInsights';
 import type { SurveyCInsightRow } from './fetchSurveyCInsights';
-import type { ScaleRating } from '../types/survey';
 
-function row(
-  overrides: Partial<SurveyCInsightRow> & {
+/** Build one aggregate fact as if returned by get_survey_c_insights_rows(). */
+function fact(
+  overrides: {
     selected_item: string;
     created_at: string;
     intent: 'YES' | 'NO';
+    fabric: number;
+    fit: number;
+    colour: number;
+    price: number;
+    response_count?: number;
   },
 ): SurveyCInsightRow {
-  const rating = (overrides.fabric ?? 3) as ScaleRating;
+  const n = overrides.response_count ?? 1;
+  const { fabric, fit, colour, price } = overrides;
   return {
-    id: overrides.id ?? `id-${overrides.created_at}-${overrides.selected_item}`,
     created_at: overrides.created_at,
     selected_item: overrides.selected_item,
-    fabric: (overrides.fabric ?? rating) as ScaleRating,
-    fit: (overrides.fit ?? rating) as ScaleRating,
-    colour: (overrides.colour ?? rating) as ScaleRating,
-    price: (overrides.price ?? rating) as ScaleRating,
     intent: overrides.intent,
+    response_count: n,
+    sum_fabric: fabric * n,
+    sum_fit: fit * n,
+    sum_colour: colour * n,
+    sum_price: price * n,
+    unhappy_fabric: fabric <= 2 ? n : 0,
+    unhappy_fit: fit <= 2 ? n : 0,
+    unhappy_colour: colour <= 2 ? n : 0,
+    unhappy_price: price <= 2 ? n : 0,
+    happy_fabric: fabric >= 4 ? n : 0,
+    happy_fit: fit >= 4 ? n : 0,
+    happy_colour: colour >= 4 ? n : 0,
+    happy_price: price >= 4 ? n : 0,
   };
 }
 
@@ -35,18 +49,18 @@ const NOW = new Date('2026-07-27T12:00:00.000Z');
 
 const FIXTURE: SurveyCInsightRow[] = [
   // Within 7d
-  row({
+  fact({
     selected_item: 'nike-windbreaker',
-    created_at: '2026-07-25T10:00:00.000Z',
+    created_at: '2026-07-25T00:00:00.000Z',
     intent: 'YES',
     fabric: 5,
     fit: 5,
     colour: 4,
     price: 4,
   }),
-  row({
+  fact({
     selected_item: 'black-zip-hoodie',
-    created_at: '2026-07-24T10:00:00.000Z',
+    created_at: '2026-07-24T00:00:00.000Z',
     intent: 'NO',
     fabric: 2,
     fit: 1,
@@ -54,9 +68,9 @@ const FIXTURE: SurveyCInsightRow[] = [
     price: 2,
   }),
   // Within 1m but outside 7d
-  row({
+  fact({
     selected_item: 'waterloo-hoodie',
-    created_at: '2026-07-10T10:00:00.000Z',
+    created_at: '2026-07-10T00:00:00.000Z',
     intent: 'YES',
     fabric: 4,
     fit: 4,
@@ -64,9 +78,9 @@ const FIXTURE: SurveyCInsightRow[] = [
     price: 3,
   }),
   // Outside 1m (within 3m)
-  row({
+  fact({
     selected_item: 'chevrolet-jersey',
-    created_at: '2026-05-15T10:00:00.000Z',
+    created_at: '2026-05-15T00:00:00.000Z',
     intent: 'NO',
     fabric: 2,
     fit: 2,
@@ -74,9 +88,9 @@ const FIXTURE: SurveyCInsightRow[] = [
     price: 1,
   }),
   // Outside 3m
-  row({
+  fact({
     selected_item: 'adidas-track-jacket',
-    created_at: '2025-12-01T10:00:00.000Z',
+    created_at: '2025-12-01T00:00:00.000Z',
     intent: 'YES',
     fabric: 5,
     fit: 4,
@@ -96,9 +110,6 @@ describe('periodLabel', () => {
 
 describe('buildHomeExportSheets', () => {
   it('produces five sheets with period metadata', () => {
-    // volumeOverTime uses Date.now internally via default `now`; we can't pass
-    // now through buildHomeExportSheets, so we spy by building with periods
-    // that still produce valid structure regardless of absolute dates.
     const sheets = buildHomeExportSheets(FIXTURE, {
       execPeriod: 'all',
       chartPeriod: 'all',
@@ -118,7 +129,7 @@ describe('buildHomeExportSheets', () => {
     expect(exec.rows[0][0]).toBe('Executive summary');
     expect(exec.rows[1][0]).toBe('Period: All time');
     expect(exec.rows[3]).toEqual(['Metric', 'Value', 'Detail']);
-    // try-ons = all 5 fixture rows
+    // try-ons = all 5 fixture response_counts
     expect(exec.rows[4]).toEqual([
       'Fitting room try-ons',
       5,
@@ -162,7 +173,7 @@ describe('buildHomeExportSheets', () => {
     expect(sheets[3].rows[1][0]).toBe('Period: 1 month');
     expect(sheets[4].rows[1][0]).toBe('Period: 3 months');
 
-    // 7d window: 2026-07-21..27 → two fixture rows
+    // 7d window: 2026-07-21..27 → two fixture facts
     expect(sheets[0].rows[4][1]).toBe(2);
 
     const allTime = buildHomeExportSheets(
@@ -187,7 +198,7 @@ describe('buildHomeExportSheets', () => {
       },
       NOW,
     );
-    // 1m: from 2026-06-28 → three rows (Jul 25, 24, 10)
+    // 1m: from 2026-06-28 → three facts (Jul 25, 24, 10)
     expect(oneMonth[0].rows[4][1]).toBe(3);
   });
 
@@ -197,7 +208,6 @@ describe('buildHomeExportSheets', () => {
     expect(sheets[0].rows[4][1]).toBe(0);
     expect(sheets[3].rows[0][0]).toBe('Top performers');
     expect(sheets[3].rows.some((r) => r[0] === 'SKU')).toBe(true);
-    // No data rows after the header
     const headerIdx = sheets[3].rows.findIndex((r) => r[0] === 'SKU');
     expect(sheets[3].rows.length).toBe(headerIdx + 1);
   });
@@ -213,7 +223,6 @@ describe('buildCategoryExportSheets', () => {
     expect(sheets[0].rows[1][0]).toBe('Category path: Hoodies');
     expect(sheets[0].rows[3][0]).toBe('Period: All time');
 
-    // Hoodies have responses → attribute health present
     expect(sheets.some((s) => s.name === 'Attribute health')).toBe(true);
     expect(sheets.some((s) => s.name === 'Child categories')).toBe(true);
 
@@ -236,7 +245,6 @@ describe('buildCategoryExportSheets', () => {
   });
 
   it('skips attribute health when category has no responses', () => {
-    // Tees apparel may have chevrolet only in fixture — use empty rows
     const path = resolveCatalogPath(['hoodies']);
     const sheets = buildCategoryExportSheets([], path!);
     expect(sheets.map((s) => s.name)).toEqual([
@@ -253,11 +261,11 @@ describe('buildCategoryExportSheets', () => {
 describe('filenames', () => {
   it('formats home and category filenames with date', () => {
     expect(homeExportFilename(NOW)).toBe(
-      'fitting-room-insights-2026-07-27.xlsx',
+      'fitting-room-insights-2026-07-27.csv',
     );
     const path = resolveCatalogPath(['hoodies', 'zip-hoodies'])!;
     expect(categoryExportFilename(path, NOW)).toBe(
-      'fitting-room-insights-hoodies-zip-hoodies-2026-07-27.xlsx',
+      'fitting-room-insights-hoodies-zip-hoodies-2026-07-27.csv',
     );
   });
 });
