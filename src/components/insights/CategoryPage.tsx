@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { motion } from 'motion/react';
 import {
   CATALOG_DEPTH_HEADINGS,
   CATALOG_LEVEL_PLURAL,
@@ -34,6 +35,7 @@ import { useRegisterInsightsExport } from './InsightsExportContext';
 import { Kpi } from './Kpi';
 import { useInsightsRows } from './InsightsLayout';
 import { RatingBar } from './RatingBar';
+import { STAGGER_CONTAINER, STAGGER_ITEM } from './motion';
 
 function rowsForNode(
   rows: SurveyCInsightRow[],
@@ -61,32 +63,34 @@ function ChildCard({
   stats: SubsetStats;
 }) {
   return (
-    <Link to={catalogHref([...path, node])} className="insights-cat-card">
-      <span className="insights-cat-tag">
-        {CATALOG_LEVEL_SINGULAR[node.level]}
-      </span>
-      <span className="insights-cat-name">{node.label}</span>
-      <span className="insights-cat-sub">
-        {childCountLabel(node)} · {stats.responses} try-on
-        {stats.responses === 1 ? '' : 's'}
-      </span>
-      {stats.responses === 0 ? (
-        <span className="insights-cat-empty">No data yet</span>
-      ) : (
-        <>
-          <div className="insights-cat-stats">
-            <span>
-              Conversion <strong>{stats.purchaseRate}%</strong>
-            </span>
-            <span>
-              Avg <strong>{stats.overallMean.toFixed(1)}</strong>
-            </span>
-          </div>
-          <RatingBar value={stats.overallMean} />
-        </>
-      )}
-      <span className="insights-cat-cta">Drill down →</span>
-    </Link>
+    <motion.div variants={STAGGER_ITEM}>
+      <Link to={catalogHref([...path, node])} className="insights-cat-card">
+        <span className="insights-cat-tag">
+          {CATALOG_LEVEL_SINGULAR[node.level]}
+        </span>
+        <span className="insights-cat-name">{node.label}</span>
+        <span className="insights-cat-sub">
+          {childCountLabel(node)} · {stats.responses} try-on
+          {stats.responses === 1 ? '' : 's'}
+        </span>
+        {stats.responses === 0 ? (
+          <span className="insights-cat-empty">No data yet</span>
+        ) : (
+          <>
+            <div className="insights-cat-stats">
+              <span>
+                Conversion <strong>{stats.purchaseRate}%</strong>
+              </span>
+              <span>
+                Avg <strong>{stats.overallMean.toFixed(1)}</strong>
+              </span>
+            </div>
+            <RatingBar value={stats.overallMean} />
+          </>
+        )}
+        <span className="insights-cat-cta">Drill down →</span>
+      </Link>
+    </motion.div>
   );
 }
 
@@ -100,7 +104,7 @@ function VariationCard({
   const item = itemForVariation(node);
 
   return (
-    <article className="insights-product">
+    <motion.article className="insights-product" variants={STAGGER_ITEM}>
       <div className="insights-product-media">
         {item ? (
           <img src={item.imageUrl} alt="" className="insights-product-img" />
@@ -136,7 +140,7 @@ function VariationCard({
           </ul>
         )}
       </div>
-    </article>
+    </motion.article>
   );
 }
 
@@ -231,7 +235,12 @@ export function CategoryPage() {
       <section className="insights-zone">
         <p className="insights-cat-tag">{CATALOG_LEVEL_SINGULAR[node.level]}</p>
         <h2 className="insights-page-title">{node.label}</h2>
-        <div className="insights-kpis">
+        <motion.div
+          className="insights-kpis"
+          variants={STAGGER_CONTAINER}
+          initial="hidden"
+          animate="show"
+        >
           <Kpi
             label="Try-ons"
             value={String(stats.responses)}
@@ -261,11 +270,16 @@ export function CategoryPage() {
             }
             compact
           />
-        </div>
+        </motion.div>
       </section>
 
       {stats.responses > 0 ? (
-        <section className="insights-panel insights-panel--wide">
+        <motion.section
+          className="insights-panel insights-panel--wide"
+          variants={STAGGER_ITEM}
+          initial="hidden"
+          animate="show"
+        >
           <h3 className="insights-panel-title">Attribute health</h3>
           <p className="insights-panel-desc">
             Mean score (1–5) and share of unhappy ratings (≤2) within{' '}
@@ -287,16 +301,26 @@ export function CategoryPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </motion.section>
       ) : null}
 
       {node.children.length > 0 ? (
-        <section className="insights-panel insights-panel--wide">
+        <motion.section
+          className="insights-panel insights-panel--wide"
+          variants={STAGGER_ITEM}
+          initial="hidden"
+          animate="show"
+        >
           <h3 className="insights-panel-title">
             {CATALOG_DEPTH_HEADINGS[path.length]}
           </h3>
           {showingVariations ? (
-            <div className="insights-products">
+            <motion.div
+              className="insights-products"
+              variants={STAGGER_CONTAINER}
+              initial="hidden"
+              animate="show"
+            >
               {node.children.map((child) => (
                 <VariationCard
                   key={child.id}
@@ -304,9 +328,14 @@ export function CategoryPage() {
                   stats={childStats.get(child.id)!}
                 />
               ))}
-            </div>
+            </motion.div>
           ) : (
-            <div className="insights-cat-grid">
+            <motion.div
+              className="insights-cat-grid"
+              variants={STAGGER_CONTAINER}
+              initial="hidden"
+              animate="show"
+            >
               {node.children.map((child) => (
                 <ChildCard
                   key={child.id}
@@ -315,9 +344,9 @@ export function CategoryPage() {
                   stats={childStats.get(child.id)!}
                 />
               ))}
-            </div>
+            </motion.div>
           )}
-        </section>
+        </motion.section>
       ) : null}
     </>
   );

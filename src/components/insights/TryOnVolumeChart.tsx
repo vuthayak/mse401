@@ -1,4 +1,11 @@
-import { useId, useMemo } from 'react';
+import {
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
+import { motion } from 'motion/react';
 import {
   volumeOverTime,
   type InsightsPeriod,
@@ -6,6 +13,7 @@ import {
 } from '../../lib/storeInsights';
 import type { SurveyCInsightRow } from '../../lib/fetchSurveyCInsights';
 import { PeriodSelector } from './PeriodSelector';
+import { SPRING } from './motion';
 
 const WIDTH = 640;
 const HEIGHT = 260;
@@ -35,8 +43,25 @@ function formatTick(value: number, asPercent: boolean): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-function ComboSvg({ series }: { series: VolumeSeries }) {
+type HoverState = {
+  index: number;
+  clientX: number;
+  clientY: number;
+};
+
+function ComboSvg({
+  series,
+  hoverIndex,
+  onHover,
+  onLeave,
+}: {
+  series: VolumeSeries;
+  hoverIndex: number | null;
+  onHover: (state: HoverState) => void;
+  onLeave: () => void;
+}) {
   const gradId = useId().replace(/:/g, '');
+  const svgRef = useRef<SVGSVGElement>(null);
   const { buckets, maxTryOns, maxConversionRate } = series;
   const n = buckets.length;
   const slot = n === 0 ? PLOT_W : PLOT_W / n;
@@ -44,12 +69,16 @@ function ComboSvg({ series }: { series: VolumeSeries }) {
 
   const xCenter = (i: number) => PAD.left + slot * i + slot / 2;
   const yTryOn = (count: number) =>
-    PAD.top + PLOT_H - (count / maxTryOns) * PLOT_H;
+    PAD.top + PLOT_H - (maxTryOns <= 0 ? 0 : (count / maxTryOns) * PLOT_H);
   const yConv = (rate: number) =>
-    PAD.top + PLOT_H - (rate / maxConversionRate) * PLOT_H;
+    PAD.top +
+    PLOT_H -
+    (maxConversionRate <= 0 ? 0 : (rate / maxConversionRate) * PLOT_H);
 
   const tryOnTicks = countTicks(maxTryOns);
   const convTicks = yTicks(maxConversionRate);
+
+  const labelEvery = n <= 8 ? 1 : n <= 16 ? 2 : Math.ceil(n / 8);
 
   const linePoints =
     n === 0
@@ -58,23 +87,50 @@ function ComboSvg({ series }: { series: VolumeSeries }) {
           .map((b, i) => `${xCenter(i)},${yConv(b.conversionRate)}`)
           .join(' ');
 
-  const labelEvery = n <= 8 ? 1 : n <= 16 ? 2 : Math.ceil(n / 8);
+  function nearestIndex(clientX: number): number | null {
+    const svg = svgRef.current;
+    if (!svg || n === 0) return null;
+    const rect = svg.getBoundingClientRect();
+    const scaleX = WIDTH / rect.width;
+    const localX = (clientX - rect.left) * scaleX;
+    if (localX < PAD.left || localX > WIDTH - PAD.right) return null;
+    const idx = Math.min(
+      n - 1,
+      Math.max(0, Math.floor((localX - PAD.left) / slot)),
+    );
+    return idx;
+  }
+
+  function handlePointer(e: ReactPointerEvent<SVGSVGElement>) {
+    const idx = nearestIndex(e.clientX);
+    if (idx === null) {
+      onLeave();
+      return;
+    }
+    onHover({ index: idx, clientX: e.clientX, clientY: e.clientY });
+  }
 
   return (
     <svg
+      ref={svgRef}
       className="insights-combo-svg"
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
       role="img"
       aria-label="Try-on volume bars with conversion rate line over time"
+      onPointerMove={handlePointer}
+      onPointerDown={handlePointer}
+      onPointerLeave={onLeave}
     >
       <defs>
         <linearGradient id={`bar-${gradId}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#b84a3a" />
-          <stop offset="100%" stopColor="#8f3a2e" />
+          <stop offset="0%" stopColor="var(--insights-chart-bar-top, #b84a3a)" />
+          <stop
+            offset="100%"
+            stopColor="var(--insights-chart-bar-bot, #8f3a2e)"
+          />
         </linearGradient>
       </defs>
 
-      {/* Grid */}
       {tryOnTicks.map((tick) => {
         const y = yTryOn(tick);
         return (
@@ -89,54 +145,69 @@ function ComboSvg({ series }: { series: VolumeSeries }) {
         );
       })}
 
-      {/* Bars */}
       {buckets.map((bucket, i) => {
         const x = xCenter(i) - barWidth / 2;
         const y = yTryOn(bucket.tryOns);
         const h = Math.max(bucket.tryOns > 0 ? 2 : 0, PAD.top + PLOT_H - y);
+        const dim =
+          hoverIndex !== null && hoverIndex !== i
+            ? ' insights-combo-bar--dim'
+            : hoverIndex === i
+              ? ' insights-combo-bar--active'
+              : '';
         return (
-          <rect
+          <motion.rect
             key={bucket.key}
-            className="insights-combo-bar"
+            className={`insights-combo-bar${dim}`}
             x={x}
-            y={y}
+            initial={false}
+            animate={{ y, height: h }}
+            transition={SPRING}
             width={barWidth}
-            height={h}
             rx={2}
             fill={`url(#bar-${gradId})`}
-          >
-            <title>
-              {bucket.label}: {bucket.tryOns} try-on
-              {bucket.tryOns === 1 ? '' : 's'}, {bucket.conversionRate}%
-              conversion
-            </title>
-          </rect>
+          />
         );
       })}
 
-      {/* Conversion line + points */}
       {n > 0 ? (
-        <polyline
+        <motion.polyline
           className="insights-combo-line"
           fill="none"
-          points={linePoints}
+          initial={false}
+          animate={{ points: linePoints }}
+          transition={SPRING}
         />
       ) : null}
+
       {buckets.map((bucket, i) => (
-        <circle
+        <motion.circle
           key={`pt-${bucket.key}`}
-          className="insights-combo-point"
-          cx={xCenter(i)}
-          cy={yConv(bucket.conversionRate)}
-          r={3.5}
-        >
-          <title>
-            {bucket.label}: {bucket.conversionRate}% conversion
-          </title>
-        </circle>
+          className={
+            hoverIndex !== null && hoverIndex !== i
+              ? 'insights-combo-point insights-combo-point--dim'
+              : 'insights-combo-point'
+          }
+          initial={false}
+          animate={{
+            cx: xCenter(i),
+            cy: yConv(bucket.conversionRate),
+          }}
+          transition={SPRING}
+          r={hoverIndex === i ? 4.5 : 3.5}
+        />
       ))}
 
-      {/* Left axis: try-ons */}
+      {hoverIndex !== null && buckets[hoverIndex] ? (
+        <line
+          className="insights-combo-crosshair"
+          x1={xCenter(hoverIndex)}
+          x2={xCenter(hoverIndex)}
+          y1={PAD.top}
+          y2={PAD.top + PLOT_H}
+        />
+      ) : null}
+
       {tryOnTicks.map((tick) => (
         <text
           key={`tl-${tick}`}
@@ -158,7 +229,6 @@ function ComboSvg({ series }: { series: VolumeSeries }) {
         Try-ons
       </text>
 
-      {/* Right axis: conversion % */}
       {convTicks.map((tick) => (
         <text
           key={`cl-${tick}`}
@@ -180,8 +250,6 @@ function ComboSvg({ series }: { series: VolumeSeries }) {
         % Conversion
       </text>
 
-      {/* X labels — the last bucket always gets one; skip modulo labels that
-          would crowd it. */}
       {buckets.map((bucket, i) =>
         i === n - 1 || (i % labelEvery === 0 && n - 1 - i >= labelEvery) ? (
           <text
@@ -210,6 +278,24 @@ export function TryOnVolumeChart({
 }) {
   const series = useMemo(() => volumeOverTime(rows, period), [rows, period]);
   const hasData = series.buckets.some((b) => b.tryOns > 0);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<HoverState | null>(null);
+
+  const tooltipBucket =
+    hover && series.buckets[hover.index]
+      ? series.buckets[hover.index]
+      : null;
+
+  const tooltipStyle = useMemo(() => {
+    if (!hover || !wrapRef.current) return undefined;
+    const rect = wrapRef.current.getBoundingClientRect();
+    const x = Math.min(
+      Math.max(hover.clientX - rect.left, 72),
+      rect.width - 72,
+    );
+    const y = Math.max(hover.clientY - rect.top, 24);
+    return { left: x, top: y };
+  }, [hover]);
 
   return (
     <div className="insights-panel insights-panel--wide insights-combo">
@@ -228,13 +314,40 @@ export function TryOnVolumeChart({
         />
       </div>
 
-      {hasData ? (
-        <ComboSvg key={period} series={series} />
-      ) : (
-        <p className="insights-combo-empty">
-          No try-ons in this period yet.
-        </p>
-      )}
+      <div className="insights-combo-chart-wrap" ref={wrapRef}>
+        {hasData ? (
+          <ComboSvg
+            series={series}
+            hoverIndex={hover?.index ?? null}
+            onHover={setHover}
+            onLeave={() => setHover(null)}
+          />
+        ) : (
+          <p className="insights-combo-empty">
+            No try-ons in this period yet.
+          </p>
+        )}
+
+        {tooltipBucket && tooltipStyle ? (
+          <div
+            className="insights-combo-tooltip"
+            style={tooltipStyle}
+            role="status"
+          >
+            <span className="insights-combo-tooltip-label">
+              {tooltipBucket.label}
+            </span>
+            <div className="insights-combo-tooltip-row">
+              <span>Try-ons</span>
+              <strong>{tooltipBucket.tryOns}</strong>
+            </div>
+            <div className="insights-combo-tooltip-row">
+              <span>Conversion</span>
+              <strong>{tooltipBucket.conversionRate}%</strong>
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       <div className="insights-combo-legend" aria-hidden="true">
         <span className="insights-combo-legend-item insights-combo-legend-item--bars">

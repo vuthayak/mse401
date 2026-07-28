@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'motion/react';
 import {
   CATALOG_TAXONOMY,
   catalogHref,
@@ -27,6 +28,7 @@ import { useInsightsRows } from './InsightsLayout';
 import { PeriodSelector } from './PeriodSelector';
 import { SkuPerformanceTable } from './SkuPerformanceTable';
 import { TryOnVolumeChart } from './TryOnVolumeChart';
+import { STAGGER_CONTAINER, STAGGER_ITEM } from './motion';
 
 export function InsightsHome() {
   const rows = useInsightsRows();
@@ -84,7 +86,12 @@ export function InsightsHome() {
             ariaLabel="Executive summary period"
           />
         </div>
-        <div className="insights-kpis">
+        <motion.div
+          className="insights-kpis"
+          variants={STAGGER_CONTAINER}
+          initial="hidden"
+          animate="show"
+        >
           <Kpi
             label="Fitting room try-ons"
             value={String(metrics.tryOns)}
@@ -112,42 +119,51 @@ export function InsightsHome() {
             }
             compact
           />
-        </div>
+        </motion.div>
         <p className="insights-footnote">
           Revenue uses catalog list prices; each try-on counts as one potential
           unit.
         </p>
 
-        <TryOnVolumeChart
-          rows={rows}
-          period={chartPeriod}
-          onPeriodChange={setChartPeriod}
-        />
+        <motion.div
+          variants={STAGGER_ITEM}
+          initial="hidden"
+          animate="show"
+        >
+          <TryOnVolumeChart
+            rows={rows}
+            period={chartPeriod}
+            onPeriodChange={setChartPeriod}
+          />
+        </motion.div>
       </section>
 
       <section className="insights-zone" aria-labelledby="zone-cats">
         <h2 id="zone-cats" className="insights-zone-title">
           Browse by category
         </h2>
-        <div className="insights-cat-grid">
+        <motion.div
+          className="insights-cat-grid"
+          variants={STAGGER_CONTAINER}
+          initial="hidden"
+          animate="show"
+        >
           {categories.map(({ node, stats }) => (
-            <Link
-              key={node.id}
-              to={catalogHref([node])}
-              className="insights-cat-card"
-            >
-              <span className="insights-cat-tag">apparel type</span>
-              <span className="insights-cat-name">{node.label}</span>
-              <span className="insights-cat-sub">
-                {stats.responses} try-on{stats.responses === 1 ? '' : 's'}
-                {stats.responses > 0
-                  ? ` · ${stats.purchaseRate}% conversion`
-                  : ''}
-              </span>
-              <span className="insights-cat-cta">Drill down →</span>
-            </Link>
+            <motion.div key={node.id} variants={STAGGER_ITEM}>
+              <Link to={catalogHref([node])} className="insights-cat-card">
+                <span className="insights-cat-tag">apparel type</span>
+                <span className="insights-cat-name">{node.label}</span>
+                <span className="insights-cat-sub">
+                  {stats.responses} try-on{stats.responses === 1 ? '' : 's'}
+                  {stats.responses > 0
+                    ? ` · ${stats.purchaseRate}% conversion`
+                    : ''}
+                </span>
+                <span className="insights-cat-cta">Drill down →</span>
+              </Link>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </section>
 
       <section className="insights-zone" aria-labelledby="zone-sku">
@@ -155,7 +171,12 @@ export function InsightsHome() {
           SKU performance
         </h2>
 
-        <div className="insights-panel insights-panel--wide">
+        <motion.div
+          className="insights-panel insights-panel--wide"
+          variants={STAGGER_ITEM}
+          initial="hidden"
+          animate="show"
+        >
           <div className="insights-panel-head">
             <div>
               <h3 className="insights-panel-title">Top performers</h3>
@@ -171,9 +192,14 @@ export function InsightsHome() {
             />
           </div>
           <SkuPerformanceTable kind="top" rows={topSplit.top} />
-        </div>
+        </motion.div>
 
-        <div className="insights-panel insights-panel--wide">
+        <motion.div
+          className="insights-panel insights-panel--wide"
+          variants={STAGGER_ITEM}
+          initial="hidden"
+          animate="show"
+        >
           <div className="insights-panel-head">
             <div>
               <h3 className="insights-panel-title">Worst performers</h3>
@@ -189,7 +215,7 @@ export function InsightsHome() {
             />
           </div>
           <SkuPerformanceTable kind="worst" rows={worstSplit.worst} />
-        </div>
+        </motion.div>
       </section>
     </>
   );
