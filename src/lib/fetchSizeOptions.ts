@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from './supabase';
+import { errorMessage, withRetry } from './withRetry';
 
 export interface SizeOption {
   variationId: string;
@@ -75,20 +76,34 @@ export async function fetchSizeOptions({
     return { status: 'error', message: 'Request cancelled.' };
   }
 
-  const { data, error } = await supabase.rpc('get_size_options', {
-    p_survey_item_id: surveyItemId,
-    p_store_id: storeId,
-  });
+  try {
+    const data = await withRetry(
+      async (attemptSignal) => {
+        const { data: rows, error } = await supabase
+          .rpc('get_size_options', {
+            p_survey_item_id: surveyItemId,
+            p_store_id: storeId,
+          })
+          .abortSignal(attemptSignal);
 
-  if (signal?.aborted) {
-    return { status: 'error', message: 'Request cancelled.' };
+        if (error) throw error;
+        return rows;
+      },
+      { signal },
+    );
+
+    const rows = (data ?? []) as ApiSizeOption[];
+    return { status: 'ok', options: rows.map(toSizeOption) };
+  } catch (error) {
+    if (signal?.aborted) {
+      return { status: 'error', message: 'Request cancelled.' };
+    }
+    if (import.meta.env.DEV) {
+      console.error('get_size_options_error', error);
+    }
+    return {
+      status: 'error',
+      message: errorMessage(error, 'Could not load size options'),
+    };
   }
-
-  if (error) {
-    console.error('get_size_options_error', error);
-    return { status: 'error', message: error.message };
-  }
-
-  const rows = (data ?? []) as ApiSizeOption[];
-  return { status: 'ok', options: rows.map(toSizeOption) };
 }

@@ -144,6 +144,8 @@ export function isBinaryRatingsComplete(
 }
 
 export interface SurveyAResponse {
+  /** Client-generated UUID for idempotent retries. */
+  id: string;
   session_token: string;
   selected_item: string;
   fabric: ScaleRating;
@@ -154,6 +156,8 @@ export interface SurveyAResponse {
 }
 
 export interface SurveyBResponse {
+  /** Client-generated UUID for idempotent retries. */
+  id: string;
   session_token: string;
   selected_item: string;
   intent: IntentDecision;
@@ -164,6 +168,8 @@ export interface SurveyBResponse {
 }
 
 export interface SurveyCResponse {
+  /** Client-generated UUID for idempotent retries. */
+  id: string;
   session_token: string;
   selected_item: string;
   fabric: ScaleRating;

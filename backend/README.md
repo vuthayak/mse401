@@ -119,4 +119,6 @@ frontend allows for that with a long timeout and a loading state.
 ## Privacy
 
 Requests carry only an ephemeral `session_token`, and nothing from `/recommend`
-is persisted. No PII is captured, stored, or logged.
+is persisted. No PII is captured, stored, or logged. The endpoint is
+rate-limited (30 requests / minute / IP) to blunt Gemini cost abuse from the
+public SPA.

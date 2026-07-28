@@ -1,4 +1,5 @@
 import type { AttributeKey, ScaleRating } from '../types/survey';
+import { errorMessage, withRetry, TimeoutError } from './withRetry';
 
 /**
  * Client for the two-stage recommender API (see backend/README.md).
@@ -116,41 +117,50 @@ export async function fetchRecommendations({
     return { status: 'unavailable', reason: 'not_configured' };
   }
 
-  const timeout = new AbortController();
-  const timer = setTimeout(() => timeout.abort(), REQUEST_TIMEOUT_MS);
-  // Abort on either the caller unmounting or the timeout elapsing.
-  const onCallerAbort = () => timeout.abort();
-  signal?.addEventListener('abort', onCallerAbort);
-
   try {
-    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/recommend`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        session_token: sessionToken,
-        selected_item_id: selectedItemId,
-        fabric: ratings.fabric,
-        fit: ratings.fit,
-        colour: ratings.colour,
-        price: ratings.price,
-        limit,
-      }),
-      signal: timeout.signal,
-    });
+    const payload = await withRetry(
+      async (attemptSignal) => {
+        const response = await fetch(
+          `${baseUrl.replace(/\/$/, '')}/recommend`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_token: sessionToken,
+              selected_item_id: selectedItemId,
+              fabric: ratings.fabric,
+              fit: ratings.fit,
+              colour: ratings.colour,
+              price: ratings.price,
+              limit,
+            }),
+            signal: attemptSignal,
+          },
+        );
 
-    if (!response.ok) {
-      const detail = await response.text();
-      console.error('recommender_error', response.status, detail);
-      return {
-        status: 'error',
-        message:
-          response.status === 404
-            ? 'No in-stock alternatives were found for this item.'
-            : 'The recommendation service is unavailable right now.',
-      };
-    }
+        if (!response.ok) {
+          if (import.meta.env.DEV) {
+            const detail = await response.text();
+            console.error('recommender_error', response.status, detail);
+          } else {
+            console.error('recommender_error', response.status);
+          }
 
-    const payload: ApiResponse = await response.json();
+          // 4xx (except 408/429) are not retryable — throw a marked error.
+          const err = new Error(
+            response.status === 404
+              ? 'No in-stock alternatives were found for this item.'
+              : 'The recommendation service is unavailable right now.',
+          ) as Error & { status: number };
+          err.status = response.status;
+          throw err;
+        }
+
+        return (await response.json()) as ApiResponse;
+      },
+      { signal, timeoutMs: REQUEST_TIMEOUT_MS },
+    );
+
     return {
       status: 'ok',
       result: {
@@ -171,16 +181,24 @@ export async function fetchRecommendations({
     if (signal?.aborted) {
       return { status: 'error', message: 'Request cancelled.' };
     }
-    const timedOut = error instanceof DOMException && error.name === 'AbortError';
-    console.error('recommender_request_failed', error);
+    if (import.meta.env.DEV) {
+      console.error('recommender_request_failed', error);
+    }
+    const timedOut = error instanceof TimeoutError;
+    const status =
+      error && typeof error === 'object' && 'status' in error
+        ? (error as { status?: number }).status
+        : undefined;
     return {
       status: 'error',
       message: timedOut
         ? 'The recommendation service took too long to respond.'
-        : 'Could not reach the recommendation service.',
+        : errorMessage(
+            error,
+            status === 404
+              ? 'No in-stock alternatives were found for this item.'
+              : 'Could not reach the recommendation service.',
+          ),
     };
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener('abort', onCallerAbort);
   }
 }

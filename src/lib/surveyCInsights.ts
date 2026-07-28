@@ -5,10 +5,11 @@ import {
 } from '../types/survey';
 import {
   INSIGHT_ATTRIBUTES,
+  sumForAttribute,
+  totalResponses,
+  unhappyForAttribute,
   type SurveyCInsightRow,
 } from './fetchSurveyCInsights';
-
-const UNHAPPY_THRESHOLD = 2;
 
 export interface AttributeStats {
   mean: number;
@@ -52,11 +53,6 @@ export interface SubsetStats {
   weakestAttribute: AttributeKey | null;
 }
 
-function mean(values: number[]): number {
-  if (values.length === 0) return 0;
-  return values.reduce((sum, v) => sum + v, 0) / values.length;
-}
-
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
@@ -65,48 +61,61 @@ function roundPct(n: number): number {
   return Math.round(n * 1000) / 10;
 }
 
-function attributeStats(values: number[]): AttributeStats {
-  if (values.length === 0) {
+function dayKey(iso: string): string {
+  return iso.slice(0, 10);
+}
+
+function attributeStatsFromFacts(
+  rows: SurveyCInsightRow[],
+  key: AttributeKey,
+): AttributeStats {
+  const total = totalResponses(rows);
+  if (total === 0) {
     return { mean: 0, unhappyRate: 0 };
   }
-  const unhappy = values.filter((v) => v <= UNHAPPY_THRESHOLD).length;
   return {
-    mean: round1(mean(values)),
-    unhappyRate: roundPct(unhappy / values.length),
+    mean: round1(sumForAttribute(rows, key) / total),
+    unhappyRate: roundPct(unhappyForAttribute(rows, key) / total),
   };
 }
 
-function dayKey(iso: string): string {
-  return iso.slice(0, 10);
+function overallMeanFromFacts(rows: SurveyCInsightRow[]): number {
+  const total = totalResponses(rows);
+  if (total === 0) return 0;
+  const scoreSum = INSIGHT_ATTRIBUTES.reduce(
+    (sum, key) => sum + sumForAttribute(rows, key),
+    0,
+  );
+  return round1(scoreSum / (total * INSIGHT_ATTRIBUTES.length));
+}
+
+function overallUnhappyFromFacts(rows: SurveyCInsightRow[]): number {
+  const total = totalResponses(rows);
+  if (total === 0) return 0;
+  const unhappySum = INSIGHT_ATTRIBUTES.reduce(
+    (sum, key) => sum + unhappyForAttribute(rows, key),
+    0,
+  );
+  return roundPct(unhappySum / (total * INSIGHT_ATTRIBUTES.length));
 }
 
 export function summarizeSurveyCInsights(
   rows: SurveyCInsightRow[],
 ): SurveyCInsightsSummary {
-  const purchaseCount = rows.filter((r) => r.intent === 'YES').length;
-  const purchaseRate = rows.length === 0 ? 0 : roundPct(purchaseCount / rows.length);
+  const total = totalResponses(rows);
+  const purchaseCount = totalResponses(
+    rows.filter((r) => r.intent === 'YES'),
+  );
+  const purchaseRate = total === 0 ? 0 : roundPct(purchaseCount / total);
 
   const attributeMeans = {} as Record<AttributeKey, number>;
   const attributeUnhappyRates = {} as Record<AttributeKey, number>;
 
   for (const key of INSIGHT_ATTRIBUTES) {
-    const values = rows.map((r) => r[key]);
-    const stats = attributeStats(values);
+    const stats = attributeStatsFromFacts(rows, key);
     attributeMeans[key] = stats.mean;
     attributeUnhappyRates[key] = stats.unhappyRate;
   }
-
-  const allScores = rows.flatMap((r) =>
-    INSIGHT_ATTRIBUTES.map((key) => r[key]),
-  );
-  const overallMean = round1(mean(allScores));
-  const overallUnhappyRate =
-    allScores.length === 0
-      ? 0
-      : roundPct(
-          allScores.filter((v) => v <= UNHAPPY_THRESHOLD).length /
-            allScores.length,
-        );
 
   let topFriction: AttributeKey | null = null;
   let maxUnhappy = -1;
@@ -116,19 +125,20 @@ export function summarizeSurveyCInsights(
       topFriction = key;
     }
   }
-  if (rows.length === 0) topFriction = null;
+  if (total === 0) topFriction = null;
 
   const byItem: ItemInsight[] = SURVEY_ITEMS.map((item) => {
     const itemRows = rows.filter((r) => r.selected_item === item.id);
-    const yes = itemRows.filter((r) => r.intent === 'YES').length;
+    const responses = totalResponses(itemRows);
+    const yes = totalResponses(itemRows.filter((r) => r.intent === 'YES'));
     const attributes = {} as Record<AttributeKey, AttributeStats>;
     let weakestAttribute: AttributeKey | null = null;
     let weakestMean = Infinity;
 
     for (const key of INSIGHT_ATTRIBUTES) {
-      const stats = attributeStats(itemRows.map((r) => r[key]));
+      const stats = attributeStatsFromFacts(itemRows, key);
       attributes[key] = stats;
-      if (itemRows.length > 0 && stats.mean < weakestMean) {
+      if (responses > 0 && stats.mean < weakestMean) {
         weakestMean = stats.mean;
         weakestAttribute = key;
       }
@@ -136,9 +146,8 @@ export function summarizeSurveyCInsights(
 
     return {
       item,
-      responses: itemRows.length,
-      purchaseRate:
-        itemRows.length === 0 ? 0 : roundPct(yes / itemRows.length),
+      responses,
+      purchaseRate: responses === 0 ? 0 : roundPct(yes / responses),
       attributes,
       weakestAttribute,
     };
@@ -152,8 +161,8 @@ export function summarizeSurveyCInsights(
       count: 0,
       purchaseCount: 0,
     };
-    existing.count += 1;
-    if (row.intent === 'YES') existing.purchaseCount += 1;
+    existing.count += row.response_count;
+    if (row.intent === 'YES') existing.purchaseCount += row.response_count;
     dailyMap.set(date, existing);
   }
   const daily = [...dailyMap.values()].sort((a, b) =>
@@ -161,11 +170,11 @@ export function summarizeSurveyCInsights(
   );
 
   return {
-    total: rows.length,
+    total,
     purchaseCount,
     purchaseRate,
-    overallMean,
-    overallUnhappyRate,
+    overallMean: overallMeanFromFacts(rows),
+    overallUnhappyRate: overallUnhappyFromFacts(rows),
     topFriction,
     attributeMeans,
     attributeUnhappyRates,
@@ -180,31 +189,30 @@ export function summarizeItemSubset(
 ): SubsetStats {
   const ids = new Set(itemIds);
   const subset = rows.filter((r) => ids.has(r.selected_item));
-  const purchaseCount = subset.filter((r) => r.intent === 'YES').length;
+  const responses = totalResponses(subset);
+  const purchaseCount = totalResponses(
+    subset.filter((r) => r.intent === 'YES'),
+  );
 
   const attributes = {} as Record<AttributeKey, AttributeStats>;
   let weakestAttribute: AttributeKey | null = null;
   let weakestMean = Infinity;
 
   for (const key of INSIGHT_ATTRIBUTES) {
-    const stats = attributeStats(subset.map((r) => r[key]));
+    const stats = attributeStatsFromFacts(subset, key);
     attributes[key] = stats;
-    if (subset.length > 0 && stats.mean < weakestMean) {
+    if (responses > 0 && stats.mean < weakestMean) {
       weakestMean = stats.mean;
       weakestAttribute = key;
     }
   }
 
-  const allScores = subset.flatMap((r) =>
-    INSIGHT_ATTRIBUTES.map((key) => r[key]),
-  );
-
   return {
-    responses: subset.length,
+    responses,
     purchaseCount,
     purchaseRate:
-      subset.length === 0 ? 0 : roundPct(purchaseCount / subset.length),
-    overallMean: round1(mean(allScores)),
+      responses === 0 ? 0 : roundPct(purchaseCount / responses),
+    overallMean: overallMeanFromFacts(subset),
     attributes,
     weakestAttribute,
   };

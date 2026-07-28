@@ -10,12 +10,14 @@ import {
 } from './catalogTaxonomy';
 import {
   INSIGHT_ATTRIBUTES,
+  happyForAttribute,
+  sumForAttribute,
+  totalResponses,
+  unhappyForAttribute,
   type SurveyCInsightRow,
 } from './fetchSurveyCInsights';
 import { ATTRIBUTE_DISPLAY } from './surveyCInsights';
 
-const UNHAPPY_THRESHOLD = 2;
-const HAPPY_THRESHOLD = 4;
 const LOW_SAMPLE_TRY_ONS = 5;
 
 const currency = new Intl.NumberFormat('en-CA', {
@@ -78,7 +80,7 @@ export function revenueFor(rows: SurveyCInsightRow[]): Revenue {
   let unrealized = 0;
 
   for (const row of rows) {
-    const price = priceForItem(row.selected_item);
+    const price = priceForItem(row.selected_item) * row.response_count;
     if (row.intent === 'YES') {
       realized += price;
     } else {
@@ -95,29 +97,23 @@ export interface AttributeDriver {
   share: number;
 }
 
-function meanOf(values: number[]): number {
-  if (values.length === 0) return 0;
-  return values.reduce((sum, v) => sum + v, 0) / values.length;
-}
-
 /**
  * Attribute most often rated poorly by shoppers who walked away.
- * Pass only the `NO` rows.
+ * Pass only the `NO` aggregate facts.
  */
 export function primaryRejectionReason(
   walkAwayRows: SurveyCInsightRow[],
 ): AttributeDriver | null {
-  if (walkAwayRows.length === 0) return null;
+  const total = totalResponses(walkAwayRows);
+  if (total === 0) return null;
 
   let best: AttributeKey | null = null;
   let bestShare = -1;
   let bestMean = Infinity;
 
   for (const key of INSIGHT_ATTRIBUTES) {
-    const values = walkAwayRows.map((row) => row[key]);
-    const share =
-      values.filter((v) => v <= UNHAPPY_THRESHOLD).length / values.length;
-    const mean = meanOf(values);
+    const share = unhappyForAttribute(walkAwayRows, key) / total;
+    const mean = sumForAttribute(walkAwayRows, key) / total;
 
     if (share > bestShare || (share === bestShare && mean < bestMean)) {
       best = key;
@@ -131,22 +127,21 @@ export function primaryRejectionReason(
 
 /**
  * Attribute most often rated highly by shoppers who intended to buy.
- * Pass only the `YES` rows.
+ * Pass only the `YES` aggregate facts.
  */
 export function primaryStrength(
   purchaseRows: SurveyCInsightRow[],
 ): AttributeDriver | null {
-  if (purchaseRows.length === 0) return null;
+  const total = totalResponses(purchaseRows);
+  if (total === 0) return null;
 
   let best: AttributeKey | null = null;
   let bestShare = -1;
   let bestMean = -Infinity;
 
   for (const key of INSIGHT_ATTRIBUTES) {
-    const values = purchaseRows.map((row) => row[key]);
-    const share =
-      values.filter((v) => v >= HAPPY_THRESHOLD).length / values.length;
-    const mean = meanOf(values);
+    const share = happyForAttribute(purchaseRows, key) / total;
+    const mean = sumForAttribute(purchaseRows, key) / total;
 
     if (share > bestShare || (share === bestShare && mean > bestMean)) {
       best = key;
@@ -203,17 +198,18 @@ export interface StoreExecutiveMetrics {
   primaryRejection: AttributeDriver | null;
 }
 
-/** Computes over the rows it is given — filter with `rowsInPeriod` first. */
+/** Computes over the facts it is given — filter with `rowsInPeriod` first. */
 export function storeExecutiveMetrics(
   rows: SurveyCInsightRow[],
 ): StoreExecutiveMetrics {
-  const conversions = rows.filter((row) => row.intent === 'YES').length;
+  const tryOns = totalResponses(rows);
+  const conversions = totalResponses(rows.filter((row) => row.intent === 'YES'));
   const revenue = revenueFor(rows);
 
   return {
-    tryOns: rows.length,
+    tryOns,
     conversions,
-    conversionRate: rows.length === 0 ? 0 : roundPct(conversions / rows.length),
+    conversionRate: tryOns === 0 ? 0 : roundPct(conversions / tryOns),
     realizedRevenue: revenue.realized,
     unrealizedRevenue: revenue.unrealized,
     primaryRejection: primaryRejectionReason(
@@ -241,17 +237,19 @@ function skuPerformance(
 ): SkuPerformance {
   const ids = new Set(leafItemIds(entry.node));
   const skuRows = rows.filter((row) => ids.has(row.selected_item));
-  const conversions = skuRows.filter((row) => row.intent === 'YES').length;
+  const tryOns = totalResponses(skuRows);
+  const conversions = totalResponses(
+    skuRows.filter((row) => row.intent === 'YES'),
+  );
   const revenue = revenueFor(skuRows);
 
   return {
     node: entry.node,
     href: catalogHref(entry.path),
     categoryLabel: ancestryLabel(entry.path),
-    tryOns: skuRows.length,
+    tryOns,
     conversions,
-    conversionRate:
-      skuRows.length === 0 ? 0 : roundPct(conversions / skuRows.length),
+    conversionRate: tryOns === 0 ? 0 : roundPct(conversions / tryOns),
     realizedRevenue: revenue.realized,
     unrealizedRevenue: revenue.unrealized,
     rejectionReason: primaryRejectionReason(
@@ -286,10 +284,12 @@ export function skuPerformanceSplit(
     .map((entry) => skuPerformance(entry, rows))
     .filter((perf) => perf.tryOns > 0);
 
+  const storeTryOns = totalResponses(rows);
+  const storeConversions = totalResponses(
+    rows.filter((row) => row.intent === 'YES'),
+  );
   const storeConversionRate =
-    rows.length === 0
-      ? 0
-      : roundPct(rows.filter((row) => row.intent === 'YES').length / rows.length);
+    storeTryOns === 0 ? 0 : roundPct(storeConversions / storeTryOns);
 
   const top = all
     .filter((perf) => perf.conversionRate >= storeConversionRate)
@@ -487,8 +487,8 @@ export function volumeOverTime(
   for (const row of filtered) {
     const key = bucketKeyFor(row.created_at, granularity);
     const existing = counts.get(key) ?? { tryOns: 0, conversions: 0 };
-    existing.tryOns += 1;
-    if (row.intent === 'YES') existing.conversions += 1;
+    existing.tryOns += row.response_count;
+    if (row.intent === 'YES') existing.conversions += row.response_count;
     counts.set(key, existing);
   }
 

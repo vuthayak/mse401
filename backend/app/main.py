@@ -15,12 +15,13 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .gemini_client import GeminiClient
 from .ranker import rank
+from .rate_limit import client_ip, recommend_limiter
 from .rules import (
     NoCandidatesError,
     UnknownItemError,
@@ -114,7 +115,9 @@ async def health() -> HealthResponse:
 
 
 @app.post("/recommend", response_model=RecommendResponse)
-async def recommend(request: RecommendRequest) -> RecommendResponse:
+async def recommend(request: RecommendRequest, http_request: Request) -> RecommendResponse:
+    recommend_limiter.check(client_ip(http_request))
+
     settings = get_settings()
     if not settings.supabase_configured:
         raise HTTPException(status_code=503, detail="Catalog database is not configured.")
