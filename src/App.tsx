@@ -1,5 +1,6 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Landing } from './components/Landing';
+import { AttendantScreen } from './components/attendant/AttendantScreen';
 import { CategoryPage } from './components/insights/CategoryPage';
 import { InsightsHome } from './components/insights/InsightsHome';
 import { InsightsLayout } from './components/insights/InsightsLayout';
@@ -13,6 +14,7 @@ export function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/survey-c" element={<SurveyC />} />
+        <Route path="/attendant" element={<AttendantScreen />} />
         <Route path="/insights" element={<InsightsLayout />}>
           <Route index element={<InsightsHome />} />
           <Route path="c/*" element={<CategoryPage />} />

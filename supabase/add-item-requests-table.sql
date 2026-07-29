@@ -43,5 +43,6 @@ create policy "anon_insert_item_requests"
   to anon
   with check (true);
 
--- Reads stay service-role only (no anon select policy), matching survey tables.
--- A future get_pending_requests RPC can expose a staff-safe view.
+-- Reads stay service-role only for direct table access historically; the
+-- attendant queue now exposes a staff-safe view via get_room_requests /
+-- set_request_status (see add-attendant-queue.sql).

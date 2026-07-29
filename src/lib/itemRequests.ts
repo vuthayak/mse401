@@ -10,6 +10,8 @@ export interface ItemRequestRecord {
   variationId: string;
   size: string;
   requestKind: ItemRequestKind;
+  /** Fitting room number (1–5). Defaults to 2 on the server if omitted. */
+  fittingRoom?: number;
   storeId?: string;
 }
 
@@ -47,6 +49,7 @@ export async function persistItemRequest(
           variation_id: record.variationId,
           size: record.size,
           request_kind: record.requestKind,
+          fitting_room: record.fittingRoom ?? 2,
           store_id: record.storeId ?? 'kw-flagship',
         })
         .abortSignal(signal);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ItemSelection } from '../components/ItemSelection';
 import { ProductHeader } from '../components/ProductHeader';
 import {
@@ -12,6 +12,7 @@ import { ResponsePreview } from '../components/ResponsePreview';
 import { SaveStatus } from '../components/SaveStatus';
 import { ScaleAxisPanel } from '../components/ScaleAxisPanel';
 import { fetchSizeOptions } from '../lib/fetchSizeOptions';
+import { getFittingRoom } from '../lib/fittingRoom';
 import { persistSurveyCResponse, type PersistOutcome } from '../lib/persistSurvey';
 import { fetchRecommendations } from '../lib/recommendItem';
 import { getSessionToken, resetSession } from '../lib/session';
@@ -88,6 +89,8 @@ export function SurveyScaleMulti({
   productHeaderVariant,
   recommenderVariant,
 }: SurveyScaleMultiProps) {
+  const [searchParams] = useSearchParams();
+  const fittingRoom = getFittingRoom(searchParams);
   const [step, setStep] = useState<SurveyStep>('items');
   const [selectedItem, setSelectedItem] = useState<SurveyItem | null>(null);
   const [ratings, setRatings] = useState<PartialScaleRatings>({});
@@ -286,6 +289,7 @@ export function SurveyScaleMulti({
         state={recommender}
         sizeOptions={sizeOptions}
         sessionToken={response.session_token}
+        fittingRoom={fittingRoom}
         saveOutcome={saveOutcome}
         saving={saving}
         onRetrySave={handleRetrySave}
