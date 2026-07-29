@@ -14,6 +14,7 @@ import {
   type RecommendedItem,
 } from '../lib/recommendItem';
 import { persistItemRequest, type ItemRequestKind } from '../lib/itemRequests';
+import { DEFAULT_FITTING_ROOM } from '../lib/fittingRoom';
 import type { SizeOption, SizeOptionsOutcome } from '../lib/fetchSizeOptions';
 import type { SurveyItem } from '../types/survey';
 
@@ -43,6 +44,8 @@ interface RecommenderScreenProps {
   state: RecommenderState;
   sizeOptions: SizeOptionsState;
   sessionToken: string;
+  /** Fitting room this kiosk is assigned to (1–5). */
+  fittingRoom?: number;
   saveOutcome: PersistOutcome | null;
   saving?: boolean;
   onRetrySave?: () => void;
@@ -59,7 +62,11 @@ const priceFormatter = new Intl.NumberFormat('en-CA', {
   maximumFractionDigits: 2,
 });
 
-function useItemRequests(sessionToken: string, sourceSurveyItemId: string) {
+function useItemRequests(
+  sessionToken: string,
+  sourceSurveyItemId: string,
+  fittingRoom: number,
+) {
   const [statuses, setStatuses] = useState<Record<string, RequestButtonStatus>>({});
   const [announce, setAnnounce] = useState('');
   const [completedRequest, setCompletedRequest] = useState<CompletedRequest | null>(
@@ -83,6 +90,7 @@ function useItemRequests(sessionToken: string, sourceSurveyItemId: string) {
         variationId,
         size,
         requestKind,
+        fittingRoom,
       });
 
       if (outcome.status === 'saved' || outcome.status === 'skipped') {
@@ -99,7 +107,7 @@ function useItemRequests(sessionToken: string, sourceSurveyItemId: string) {
       setStatuses((prev) => ({ ...prev, [variationId]: 'error' }));
       setAnnounce(`Could not request ${title}. Try again.`);
     },
-    [sessionToken, sourceSurveyItemId],
+    [sessionToken, sourceSurveyItemId, fittingRoom],
   );
 
   return { statuses, announce, completedRequest, requestItem };
@@ -125,6 +133,7 @@ export function RecommenderScreen({
   state,
   sizeOptions,
   sessionToken,
+  fittingRoom = DEFAULT_FITTING_ROOM,
   saveOutcome,
   saving = false,
   onRetrySave,
@@ -139,6 +148,7 @@ export function RecommenderScreen({
   const { statuses, announce, completedRequest, requestItem } = useItemRequests(
     sessionToken,
     originalItem.id,
+    fittingRoom,
   );
   const isConfirmed = completedRequest !== null;
 
@@ -158,7 +168,7 @@ export function RecommenderScreen({
   }, [isConfirmed, stepHeadingRef]);
 
   const subtitle = isConfirmed
-    ? 'Staff will bring it to this fitting room. You are all set — no need to rate again.'
+    ? `Staff will bring it to fitting room ${fittingRoom}. You are all set — no need to rate again.`
     : state.status === 'loading'
       ? `Checking what else is in stock after your notes on ${originalItem.title}…`
       : state.status === 'ready'
@@ -242,6 +252,7 @@ export function RecommenderScreen({
         {isConfirmed && completedRequest ? (
           <RequestConfirmation
             request={completedRequest}
+            fittingRoom={fittingRoom}
             isClinical={isClinical}
             borderColor={borderColor}
           />
@@ -336,10 +347,12 @@ export function RecommenderScreen({
 
 function RequestConfirmation({
   request,
+  fittingRoom,
   isClinical,
   borderColor,
 }: {
   request: CompletedRequest;
+  fittingRoom: number;
   isClinical: boolean;
   borderColor: string;
 }) {
@@ -374,7 +387,7 @@ function RequestConfirmation({
         {request.title} · Size {request.size}
       </p>
       <p className="request-confirmation-note">
-        A staff member will bring this to your room shortly.
+        A staff member will bring this to fitting room {fittingRoom} shortly.
       </p>
     </section>
   );

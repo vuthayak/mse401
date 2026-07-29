@@ -6,8 +6,9 @@ Lo-fi iPad kiosk prototype for collecting per-item fitting-room feedback.
 
 | Route | Screen |
 |-------|--------|
-| `/` | Landing — survey or insights |
+| `/` | Landing — survey, attendant, or insights |
 | `/survey-c` | Survey C: item picker → 2×2 grid of 5-point scales → purchase intent |
+| `/attendant` | Attendant queue — live fitting-room requests with Delivered / Out of stock |
 | `/insights` | Retailer dashboard home — executive KPIs + SKU performance |
 | `/insights/c/:apparel/:design/:sku/:variation` | Category drill-down pages (each segment optional) |
 
@@ -15,9 +16,9 @@ Lo-fi iPad kiosk prototype for collecting per-item fitting-room feedback.
 1. Pick one of five items
 2. Rate Fabric, Fit, Colour, and Price on a 5-point scale (all on one screen)
 3. Answer purchase intent (`YES` / `NO`)
-4. On `NO`, the [recommender API](backend/README.md) returns up to three in-stock alternatives with reasons
+4. On `NO`, the [recommender API](backend/README.md) returns up to three in-stock alternatives with reasons; the shopper can request a size or an alternative to their fitting room (default room **2**)
 
-On completion the response is saved to `survey_c_responses` in **Supabase** (when configured), shown on screen, and logged to the console as `survey_c_response`.
+On completion the response is saved to `survey_c_responses` in **Supabase** (when configured), shown on screen, and logged to the console as `survey_c_response`. Item requests land in `item_requests` and appear on `/#/attendant`.
 
 ## Alternative item recommender
 
@@ -147,6 +148,15 @@ If A and B already exist and you only need Survey C, run [`supabase/add-survey-c
 
 Then run [`supabase/add-survey-c-insights-rpc.sql`](supabase/add-survey-c-insights-rpc.sql), then [`supabase/add-insights-aggregates.sql`](supabase/add-insights-aggregates.sql) so `/insights` loads **day × item × intent aggregates** (no individual responses) for the anon key. Also run [`supabase/add-retention-policy.sql`](supabase/add-retention-policy.sql) for 24-hour session-token purge.
 
+For fitting-room item requests and the attendant screen, also run (after the recommender catalog exists):
+
+1. [`supabase/add-item-requests-table.sql`](supabase/add-item-requests-table.sql) — `item_requests` table
+2. [`supabase/add-size-options-rpc.sql`](supabase/add-size-options-rpc.sql) — size chips on the recommender screen
+3. [`supabase/add-attendant-queue.sql`](supabase/add-attendant-queue.sql) — `fitting_room` column, `get_room_requests` / `set_request_status` RPCs, anon SELECT + Realtime publication
+4. Optional demo seed: [`supabase/seed-attendant-demo.sql`](supabase/seed-attendant-demo.sql) — a few pending requests across rooms 1–5 with short wait ages
+
+The attendant screen prefers **Supabase Realtime** (`item_requests` must be in the `supabase_realtime` publication — the migration adds it). If Realtime is unavailable it falls back to polling every 4 seconds.
+
 ### 2. Seed Survey C (optional)
 
 To load ~60 synthetic rows for analysis / demos, run [`supabase/seed-survey-c.sql`](supabase/seed-survey-c.sql) after the table exists. Safe to re-run only if you clear existing seed rows first (see comments in that file).
@@ -199,7 +209,9 @@ Pages is a static host, so the recommender runs as a separate Render service. On
 
 ### Viewing responses
 
-In-app: open **`/#/insights`** for the retailer dashboard.
+In-app: open **`/#/insights`** for the retailer dashboard, or **`/#/attendant`** for the live fitting-room request queue.
+
+Survey requests default to **fitting room 2**. Override per device with `/#/survey-c?room=4` (clamped to 1–5).
 
 Or Supabase → **Table Editor** → `survey_c_responses`. Each row:
 
@@ -230,9 +242,13 @@ Or Supabase → **Table Editor** → `survey_c_responses`. Each row:
 
 ```
 src/
-├── App.tsx                      # Routes (Survey C + insights)
+├── App.tsx                      # Routes (Survey C + attendant + insights)
 ├── components/
 │   ├── Landing.tsx
+│   ├── attendant/
+│   │   ├── AttendantScreen.tsx  # Live request queue
+│   │   ├── RequestCard.tsx
+│   │   └── RoomStrip.tsx
 │   ├── insights/
 │   │   ├── InsightsLayout.tsx   # Shared header + one-time data load
 │   │   ├── InsightsHome.tsx     # Executive KPIs + volume chart + SKU performance
@@ -249,6 +265,10 @@ src/
 │   └── SaveStatus.tsx
 ├── lib/
 │   ├── persistSurvey.ts         # Flat inserts for A / B / C
+│   ├── itemRequests.ts          # Fitting-room item request inserts
+│   ├── attendantQueue.ts        # Attendant RPCs + Realtime/polling
+│   ├── fittingRoom.ts           # Room number parse (default 2)
+│   ├── motion.ts                # Shared spring presets + reduced-motion hook
 │   ├── fetchSurveyCInsights.ts  # Insights RPC fetch
 │   ├── surveyCInsights.ts       # Rating aggregates
 │   ├── storeInsights.ts         # Revenue, drivers, volume-over-time, actions
@@ -268,6 +288,10 @@ supabase/
 ├── add-survey-c-table.sql       # Incremental C table only
 ├── add-survey-c-insights-rpc.sql # Dashboard read RPC
 ├── seed-survey-c.sql            # Synthetic Survey C rows
+├── add-item-requests-table.sql  # Fitting-room item requests
+├── add-size-options-rpc.sql     # Size chips for the recommender screen
+├── add-attendant-queue.sql      # Attendant RPCs + Realtime
+├── seed-attendant-demo.sql      # Demo pending requests (short wait ages)
 ├── recommender-schema.sql       # Catalog, inventory, pgvector + HNSW
 ├── recommender-seed.sql         # 21 styles / 23 colourways / 69 SKUs
 ├── recommender-rpc.sql          # Stage 1 rule engine + vector search
