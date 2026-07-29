@@ -16,7 +16,7 @@ import {
 import { persistItemRequest, type ItemRequestKind } from '../lib/itemRequests';
 import { DEFAULT_FITTING_ROOM } from '../lib/fittingRoom';
 import type { SizeOption, SizeOptionsOutcome } from '../lib/fetchSizeOptions';
-import type { SurveyItem } from '../types/survey';
+import type { ProductDisplayItem, SurveyItem } from '../types/survey';
 
 export type RecommenderState =
   | { status: 'loading' }
@@ -38,9 +38,13 @@ interface CompletedRequest {
   tagline: string;
 }
 
+/** Tried-on product for the recommender — needs id (selected_item) + title. */
+export type RecommenderOriginalItem = Pick<ProductDisplayItem, 'id' | 'title'> &
+  Partial<Pick<ProductDisplayItem, 'tagline' | 'imageUrl'>>;
+
 interface RecommenderScreenProps {
   variant: 'clinical' | 'warm';
-  originalItem: SurveyItem;
+  originalItem: RecommenderOriginalItem;
   state: RecommenderState;
   sizeOptions: SizeOptionsState;
   sessionToken: string;
@@ -51,6 +55,10 @@ interface RecommenderScreenProps {
   onRetrySave?: () => void;
   retryDisabled?: boolean;
   onStartOver: () => void;
+  /** Fires after a successful item request (e.g. cart activity touch). */
+  onActivity?: () => void;
+  /** Label for the return/reset button (default: Start Over). */
+  startOverLabel?: string;
   stepHeadingRef?: Ref<HTMLElement | null>;
   statusMessage?: string;
   progressNow?: number;
@@ -66,6 +74,7 @@ function useItemRequests(
   sessionToken: string,
   sourceSurveyItemId: string,
   fittingRoom: number,
+  onActivity?: () => void,
 ) {
   const [statuses, setStatuses] = useState<Record<string, RequestButtonStatus>>({});
   const [announce, setAnnounce] = useState('');
@@ -101,13 +110,14 @@ function useItemRequests(
             ? `Request recorded locally for ${title} in size ${size}.`
             : `Request confirmed: ${title} in size ${size}.`,
         );
+        onActivity?.();
         return;
       }
 
       setStatuses((prev) => ({ ...prev, [variationId]: 'error' }));
       setAnnounce(`Could not request ${title}. Try again.`);
     },
-    [sessionToken, sourceSurveyItemId, fittingRoom],
+    [sessionToken, sourceSurveyItemId, fittingRoom, onActivity],
   );
 
   return { statuses, announce, completedRequest, requestItem };
@@ -139,6 +149,8 @@ export function RecommenderScreen({
   onRetrySave,
   retryDisabled,
   onStartOver,
+  onActivity,
+  startOverLabel = 'Start Over',
   stepHeadingRef,
   statusMessage = '',
   progressNow = 3,
@@ -149,6 +161,7 @@ export function RecommenderScreen({
     sessionToken,
     originalItem.id,
     fittingRoom,
+    onActivity,
   );
   const isConfirmed = completedRequest !== null;
 
@@ -332,7 +345,7 @@ export function RecommenderScreen({
           style={{ marginTop: 20, width: '100%', fontSize: 18, borderColor }}
           onClick={onStartOver}
         >
-          Start Over
+          {startOverLabel}
         </button>
         <Link to="/" className="survey-back-link">
           ← Back to start

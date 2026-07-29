@@ -125,7 +125,7 @@ To comply fully with PIPEDA (Personal Information Protection and Electronic Docu
 
 * Interaction data is keyed strictly to an ephemeral session token and a UTC timestamp (coarsened to the hour for retailer analytics).
 * No Personally Identifiable Information (PII) or shopper profiles are captured or linked.
-* Session linkage (`session_token`) is purged from persisted survey rows after **24 hours**. The in-memory kiosk token is cleared on Start Over or page reload. Item-request rows used for staff fulfillment are deleted after **7 days**.
+* Session linkage (`session_token`) is purged from persisted survey rows after **24 hours**. The in-memory kiosk token is cleared on Start Over or page reload. Item-request rows used for staff fulfillment are deleted after **1 day**. Cleared fitting-room carts are deleted after **24 hours**; idle carts auto-clear after **10 minutes** of no shopper activity.
 
 ---
 

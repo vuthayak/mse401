@@ -48,7 +48,10 @@ function toSizeOption(raw: ApiSizeOption): SizeOption {
 }
 
 export interface FetchSizeOptionsParams {
-  surveyItemId: string;
+  /** Preferred: catalog variation_id (Survey C cart flow). */
+  variationId?: string;
+  /** Legacy Survey A/B static item id. */
+  surveyItemId?: string;
   storeId?: string;
   signal?: AbortSignal;
 }
@@ -57,12 +60,23 @@ export interface FetchSizeOptionsParams {
  * Loads other sizes of the tried-on colourway for the size-request panel.
  * Hits Supabase directly (anon-callable RPC), so it stays fast even when the
  * Render recommender host is cold.
+ *
+ * Prefer `variationId` → `get_size_options_for_variation`. Fall back to
+ * `surveyItemId` → `get_size_options` for Survey A/B.
  */
 export async function fetchSizeOptions({
+  variationId,
   surveyItemId,
   storeId = 'kw-flagship',
   signal,
 }: FetchSizeOptionsParams): Promise<SizeOptionsOutcome> {
+  if (!variationId && !surveyItemId) {
+    return {
+      status: 'error',
+      message: 'variationId or surveyItemId is required.',
+    };
+  }
+
   if (!isSupabaseConfigured()) {
     return { status: 'unavailable', reason: 'not_configured' };
   }
@@ -76,14 +90,19 @@ export async function fetchSizeOptions({
     return { status: 'error', message: 'Request cancelled.' };
   }
 
+  const useVariation = Boolean(variationId);
+  const rpcName = useVariation
+    ? 'get_size_options_for_variation'
+    : 'get_size_options';
+  const rpcArgs = useVariation
+    ? { p_variation_id: variationId, p_store_id: storeId }
+    : { p_survey_item_id: surveyItemId, p_store_id: storeId };
+
   try {
     const data = await withRetry(
       async (attemptSignal) => {
         const { data: rows, error } = await supabase
-          .rpc('get_size_options', {
-            p_survey_item_id: surveyItemId,
-            p_store_id: storeId,
-          })
+          .rpc(rpcName, rpcArgs)
           .abortSignal(attemptSignal);
 
         if (error) throw error;
@@ -99,7 +118,7 @@ export async function fetchSizeOptions({
       return { status: 'error', message: 'Request cancelled.' };
     }
     if (import.meta.env.DEV) {
-      console.error('get_size_options_error', error);
+      console.error(`${rpcName}_error`, error);
     }
     return {
       status: 'error',

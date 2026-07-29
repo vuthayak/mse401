@@ -1,8 +1,8 @@
 import type { ElementType } from 'react';
-import type { SurveyItem } from '../types/survey';
+import type { ProductDisplayItem } from '../types/survey';
 
 interface ProductHeaderProps {
-  item: SurveyItem;
+  item: ProductDisplayItem;
   variant?: 'clinical' | 'warm';
   headingLevel?: 1 | 2;
 }
