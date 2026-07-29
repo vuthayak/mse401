@@ -45,7 +45,9 @@ When recommendations are requested, **four attribute ratings and catalog metadat
 ## Retention
 
 - **Session linkage** (`session_token` on survey rows) is nullified after **24 hours**. Ratings and intent remain for aggregate analytics.
-- **Item requests** are deleted after **7 days** (operational fulfillment window).
+- **Item requests** are deleted after **1 day** (operational fulfillment window).
+- **Cleared fitting-room carts** are deleted after **24 hours**.
+- Active carts auto-clear after **10 minutes** of no shopper activity (lazy expiry on read).
 - The in-memory kiosk token ends when the session resets.
 
 See `supabase/add-retention-policy.sql`.

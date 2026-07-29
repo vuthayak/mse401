@@ -78,8 +78,10 @@ as $$
   left join lateral (
     select cv2.title
     from public.catalog_variations cv2
-    where cv2.survey_item_id = ir.source_survey_item_id
-      and cv2.is_default
+    where cv2.variation_id = ir.source_survey_item_id
+       or (cv2.survey_item_id = ir.source_survey_item_id and cv2.is_default)
+    order by
+      case when cv2.variation_id = ir.source_survey_item_id then 0 else 1 end
     limit 1
   ) src on true
   where ir.store_id = p_store_id

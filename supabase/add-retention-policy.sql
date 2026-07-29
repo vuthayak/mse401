@@ -1,6 +1,7 @@
 -- Retention policy: sever session linkage after 24 hours, drop item requests
--- after 7 days. Ratings remain for analytics; only the pseudonymous link that
--- ties multiple responses to one kiosk session is cleared.
+-- after 1 day, and drop cleared fitting-room carts after 24 hours. Ratings
+-- remain for analytics; only the pseudonymous link that ties multiple
+-- responses to one kiosk session is cleared.
 --
 -- Run in Supabase → SQL Editor.
 -- Requires the pg_cron extension (Database → Extensions → pg_cron). If the
@@ -42,9 +43,16 @@ begin
       and created_at < now() - interval '24 hours';
 
   -- Item requests identify a garment size request for staff fulfillment;
-  -- drop them after 7 days once the operational window has closed.
+  -- drop them after 1 day once the operational window has closed.
   delete from public.item_requests
-    where created_at < now() - interval '7 days';
+    where created_at < now() - interval '1 day';
+
+  -- Cleared fitting-room carts (and cascaded items) after 24 hours.
+  if to_regclass('public.fitting_room_carts') is not null then
+    delete from public.fitting_room_carts
+      where cleared_at is not null
+        and cleared_at < now() - interval '24 hours';
+  end if;
 end;
 $$;
 

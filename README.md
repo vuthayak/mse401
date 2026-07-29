@@ -7,18 +7,19 @@ Lo-fi iPad kiosk prototype for collecting per-item fitting-room feedback.
 | Route | Screen |
 |-------|--------|
 | `/` | Landing — survey, attendant, or insights |
-| `/survey-c` | Survey C: item picker → 2×2 grid of 5-point scales → purchase intent |
-| `/attendant` | Attendant queue — live fitting-room requests with Delivered / Out of stock |
+| `/survey-c` | Survey C: cart items → rate each (skip / finish early) → purchase intent |
+| `/attendant` | Attendant — check-in carts, room carts, live request queue |
 | `/insights` | Retailer dashboard home — executive KPIs + SKU performance |
 | `/insights/c/:apparel/:design/:sku/:variation` | Category drill-down pages (each segment optional) |
 
 **Survey C flow**
-1. Pick one of five items
-2. Rate Fabric, Fit, Colour, and Price on a 5-point scale (all on one screen)
-3. Answer purchase intent (`YES` / `NO`)
-4. On `NO`, the [recommender API](backend/README.md) returns up to three in-stock alternatives with reasons; the shopper can request a size or an alternative to their fitting room (default room **2**)
+1. An attendant assigns catalog items + sizes to a fitting room via the check-in panel on `/#/attendant` (dev stand-in for barcode scanning)
+2. The kiosk at `/#/survey-c?room=N` loads that room's cart (or waits if empty)
+3. Rate Fabric, Fit, Colour, and Price for each item (skip or finish early anytime)
+4. Answer purchase intent (`YES` / `NO`)
+5. On `NO`, the [recommender API](backend/README.md) returns up to three in-stock alternatives; the shopper can request a size or an alternative to their room
 
-On completion the response is saved to `survey_c_responses` in **Supabase** (when configured), shown on screen, and logged to the console as `survey_c_response`. Item requests land in `item_requests` and appear on `/#/attendant`.
+Carts auto-clear after **10 minutes** of no shopper activity, or when the attendant clears the room. Responses store catalog `variation_id`s as `selected_item`. Item requests land in `item_requests` and appear on `/#/attendant`.
 
 ## Alternative item recommender
 
@@ -146,16 +147,17 @@ That creates `survey_a_responses`, `survey_b_responses`, and `survey_c_responses
 
 If A and B already exist and you only need Survey C, run [`supabase/add-survey-c-table.sql`](supabase/add-survey-c-table.sql) instead.
 
-Then run [`supabase/add-survey-c-insights-rpc.sql`](supabase/add-survey-c-insights-rpc.sql), then [`supabase/add-insights-aggregates.sql`](supabase/add-insights-aggregates.sql) so `/insights` loads **day × item × intent aggregates** (no individual responses) for the anon key. Also run [`supabase/add-retention-policy.sql`](supabase/add-retention-policy.sql) for 24-hour session-token purge.
+Then run [`supabase/add-survey-c-insights-rpc.sql`](supabase/add-survey-c-insights-rpc.sql), then [`supabase/add-insights-aggregates.sql`](supabase/add-insights-aggregates.sql) so `/insights` loads **day × item × intent aggregates** (no individual responses) for the anon key. Also run [`supabase/add-retention-policy.sql`](supabase/add-retention-policy.sql) for 24-hour session-token purge, 1-day item-request deletion, and cleared-cart cleanup.
 
-For fitting-room item requests and the attendant screen, also run (after the recommender catalog exists):
+For fitting-room carts, item requests, and the attendant screen, also run (after the recommender catalog exists):
 
 1. [`supabase/add-item-requests-table.sql`](supabase/add-item-requests-table.sql) — `item_requests` table
-2. [`supabase/add-size-options-rpc.sql`](supabase/add-size-options-rpc.sql) — size chips on the recommender screen
+2. [`supabase/add-size-options-rpc.sql`](supabase/add-size-options-rpc.sql) — size chips (survey slug + variation id RPCs)
 3. [`supabase/add-attendant-queue.sql`](supabase/add-attendant-queue.sql) — `fitting_room` column, `get_room_requests` / `set_request_status` RPCs, anon SELECT + Realtime publication
-4. Optional demo seed: [`supabase/seed-attendant-demo.sql`](supabase/seed-attendant-demo.sql) — a few pending requests across rooms 1–5 with short wait ages
+4. [`supabase/add-fitting-room-carts.sql`](supabase/add-fitting-room-carts.sql) — carts + cart items, check-in / clear / idle-expiry RPCs, catalog list, Realtime
+5. Optional demo seed: [`supabase/seed-attendant-demo.sql`](supabase/seed-attendant-demo.sql) — pending requests + an active room-2 cart
 
-The attendant screen prefers **Supabase Realtime** (`item_requests` must be in the `supabase_realtime` publication — the migration adds it). If Realtime is unavailable it falls back to polling every 4 seconds.
+The attendant screen prefers **Supabase Realtime** (`item_requests`, `fitting_room_carts`, and `fitting_room_cart_items` in the `supabase_realtime` publication). If Realtime is unavailable it falls back to polling every 4 seconds.
 
 ### 2. Seed Survey C (optional)
 
@@ -211,7 +213,7 @@ Pages is a static host, so the recommender runs as a separate Render service. On
 
 In-app: open **`/#/insights`** for the retailer dashboard, or **`/#/attendant`** for the live fitting-room request queue.
 
-Survey requests default to **fitting room 2**. Override per device with `/#/survey-c?room=4` (clamped to 1–5).
+Survey kiosks load the cart assigned to their fitting room (`/#/survey-c?room=4`, clamped to 1–5). Empty rooms show a waiting screen until the attendant checks items in.
 
 Or Supabase → **Table Editor** → `survey_c_responses`. Each row:
 
@@ -246,7 +248,9 @@ src/
 ├── components/
 │   ├── Landing.tsx
 │   ├── attendant/
-│   │   ├── AttendantScreen.tsx  # Live request queue
+│   │   ├── AttendantScreen.tsx  # Queue + check-in + room carts
+│   │   ├── CheckInPanel.tsx     # Dev assign items to a room
+│   │   ├── RoomCartCard.tsx     # Per-room cart + Clear room
 │   │   ├── RequestCard.tsx
 │   │   └── RoomStrip.tsx
 │   ├── insights/
@@ -257,7 +261,9 @@ src/
 │   │   ├── SkuPerformanceTable.tsx
 │   │   ├── Kpi.tsx
 │   │   └── RatingBar.tsx
-│   ├── ItemSelection.tsx
+│   ├── CartItemSelection.tsx    # Kiosk cart list (rate / skip / done)
+│   ├── CartWaiting.tsx          # Waiting for attendant assignment
+│   ├── ItemSelection.tsx        # Static picker (Survey A/B)
 │   ├── ProductHeader.tsx
 │   ├── ScaleAxisPanel.tsx
 │   ├── RecommenderScreen.tsx
@@ -267,18 +273,22 @@ src/
 │   ├── persistSurvey.ts         # Flat inserts for A / B / C
 │   ├── itemRequests.ts          # Fitting-room item request inserts
 │   ├── attendantQueue.ts        # Attendant RPCs + Realtime/polling
+│   ├── carts.ts                 # Fitting-room cart RPCs + idle helpers
+│   ├── catalogItems.ts          # Catalog list for check-in
+│   ├── useFittingRoomCart.ts    # Kiosk cart subscription hook
+│   ├── realtimeSubscription.ts  # Shared Realtime + polling fallback
 │   ├── fittingRoom.ts           # Room number parse (default 2)
 │   ├── motion.ts                # Shared spring presets + reduced-motion hook
 │   ├── fetchSurveyCInsights.ts  # Insights RPC fetch
 │   ├── surveyCInsights.ts       # Rating aggregates
 │   ├── storeInsights.ts         # Revenue, drivers, volume-over-time, actions
-│   ├── catalogTaxonomy.ts       # Category hierarchy, mirrors the Supabase catalog
+│   ├── catalogTaxonomy.ts       # Full catalog hierarchy (69 variation leaves)
 │   ├── recommendItem.ts         # Recommender API client
 │   ├── session.ts               # Ephemeral anonymous session UUID
 │   └── supabase.ts
 ├── surveys/
-│   ├── SurveyC.tsx              # Active survey
-│   ├── SurveyScaleMulti.tsx     # Shared C layout/logic
+│   ├── SurveyC.tsx              # Active survey (privacy gate + C)
+│   ├── SurveyScaleMulti.tsx     # Cart-driven C layout/logic
 │   ├── SurveyA.tsx              # Kept, not routed
 │   └── SurveyB.tsx              # Kept, not routed
 └── types/survey.ts
@@ -291,7 +301,9 @@ supabase/
 ├── add-item-requests-table.sql  # Fitting-room item requests
 ├── add-size-options-rpc.sql     # Size chips for the recommender screen
 ├── add-attendant-queue.sql      # Attendant RPCs + Realtime
-├── seed-attendant-demo.sql      # Demo pending requests (short wait ages)
+├── add-fitting-room-carts.sql   # Carts, check-in RPCs, 10-min idle expiry
+├── seed-attendant-demo.sql      # Demo requests + room-2 cart
+├── add-retention-policy.sql     # 24h session null / 1d requests / cart cleanup
 ├── recommender-schema.sql       # Catalog, inventory, pgvector + HNSW
 ├── recommender-seed.sql         # 21 styles / 23 colourways / 69 SKUs
 ├── recommender-rpc.sql          # Stage 1 rule engine + vector search
@@ -355,7 +367,7 @@ zip -r mse401-fitting-room-surveys.zip mse401 \
 
 ## Privacy note
 
-This prototype uses an in-memory anonymous session UUID only. It does not collect names, emails, or other PII. Session linkage on stored survey rows is purged after 24 hours (see `supabase/add-retention-policy.sql`). A footer on each screen states: *"Anonymous session — no personal data collected."* See [PRIVACY.md](PRIVACY.md) for the full notice.
+This prototype uses an in-memory anonymous session UUID only (adopted from the cart when one is assigned). It does not collect names, emails, or other PII. Session linkage on stored survey rows is purged after 24 hours; item requests after 1 day; cleared carts after 24 hours (see `supabase/add-retention-policy.sql`). A footer on each screen states: *"Anonymous session — no personal data collected."* See [PRIVACY.md](PRIVACY.md) for the full notice.
 
 ## Tech stack
 

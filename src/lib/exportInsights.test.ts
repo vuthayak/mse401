@@ -50,7 +50,7 @@ const NOW = new Date('2026-07-27T12:00:00.000Z');
 const FIXTURE: SurveyCInsightRow[] = [
   // Within 7d
   fact({
-    selected_item: 'nike-windbreaker',
+    selected_item: 'nike-windrunner-black-m',
     created_at: '2026-07-25T00:00:00.000Z',
     intent: 'YES',
     fabric: 5,
@@ -59,7 +59,7 @@ const FIXTURE: SurveyCInsightRow[] = [
     price: 4,
   }),
   fact({
-    selected_item: 'black-zip-hoodie',
+    selected_item: 'essential-zip-hoodie-black-m',
     created_at: '2026-07-24T00:00:00.000Z',
     intent: 'NO',
     fabric: 2,
@@ -69,7 +69,7 @@ const FIXTURE: SurveyCInsightRow[] = [
   }),
   // Within 1m but outside 7d
   fact({
-    selected_item: 'waterloo-hoodie',
+    selected_item: 'waterloo-zip-hoodie-heather-grey-m',
     created_at: '2026-07-10T00:00:00.000Z',
     intent: 'YES',
     fabric: 4,
@@ -79,7 +79,7 @@ const FIXTURE: SurveyCInsightRow[] = [
   }),
   // Outside 1m (within 3m)
   fact({
-    selected_item: 'chevrolet-jersey',
+    selected_item: 'chevrolet-graphic-jersey-maroon-m',
     created_at: '2026-05-15T00:00:00.000Z',
     intent: 'NO',
     fabric: 2,
@@ -89,7 +89,7 @@ const FIXTURE: SurveyCInsightRow[] = [
   }),
   // Outside 3m
   fact({
-    selected_item: 'adidas-track-jacket',
+    selected_item: 'adidas-santiago-track-colourblock-navy-m',
     created_at: '2025-12-01T00:00:00.000Z',
     intent: 'YES',
     fabric: 5,

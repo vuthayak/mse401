@@ -20,6 +20,7 @@ import {
   INSIGHT_ATTRIBUTES,
   type SurveyCInsightRow,
 } from '../../lib/fetchSurveyCInsights';
+import { catalogImageUrl } from '../../lib/recommendItem';
 import {
   driverLabel,
   formatCurrency,
@@ -102,12 +103,15 @@ function VariationCard({
   stats: SubsetStats;
 }) {
   const item = itemForVariation(node);
+  const imageUrl = node.imagePath
+    ? catalogImageUrl(node.imagePath)
+    : item?.imageUrl;
 
   return (
     <motion.article className="insights-product" variants={STAGGER_ITEM}>
       <div className="insights-product-media">
-        {item ? (
-          <img src={item.imageUrl} alt="" className="insights-product-img" />
+        {imageUrl ? (
+          <img src={imageUrl} alt="" className="insights-product-img" />
         ) : null}
       </div>
       <div className="insights-product-body">

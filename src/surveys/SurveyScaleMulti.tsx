@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ItemSelection } from '../components/ItemSelection';
+import { CartItemSelection } from '../components/CartItemSelection';
+import { CartWaiting } from '../components/CartWaiting';
 import { ProductHeader } from '../components/ProductHeader';
 import {
   RecommenderScreen,
@@ -8,30 +9,38 @@ import {
   type RecommenderState,
   type SizeOptionsState,
 } from '../components/RecommenderScreen';
-import { ResponsePreview } from '../components/ResponsePreview';
 import { SaveStatus } from '../components/SaveStatus';
 import { ScaleAxisPanel } from '../components/ScaleAxisPanel';
+import type { CartItem } from '../lib/carts';
 import { fetchSizeOptions } from '../lib/fetchSizeOptions';
 import { getFittingRoom } from '../lib/fittingRoom';
 import { persistSurveyCResponse, type PersistOutcome } from '../lib/persistSurvey';
 import { fetchRecommendations } from '../lib/recommendItem';
 import { getSessionToken, resetSession } from '../lib/session';
+import { useFittingRoomCart } from '../lib/useFittingRoomCart';
 import { isOnline } from '../lib/withRetry';
 import {
   SURVEY_A_AXES,
   INTENT_STEM,
   INTENT_LABEL_PURCHASE,
   INTENT_LABEL_LEAVE,
+  cartItemToTryOnItem,
   isScaleRatingsComplete,
   type AttributeKey,
   type IntentDecision,
   type PartialScaleRatings,
   type ScaleRating,
   type SurveyCResponse,
-  type SurveyItem,
+  type TryOnItem,
 } from '../types/survey';
 
-type SurveyStep = 'items' | 'ratings' | 'intent' | 'result';
+type SurveyStep =
+  | 'waiting'
+  | 'items'
+  | 'ratings'
+  | 'intent'
+  | 'result'
+  | 'visit-complete';
 
 const TOTAL_PROGRESS_STEPS = 3;
 
@@ -53,17 +62,21 @@ function progressValue(step: SurveyStep): number {
 }
 
 function stepTitle(step: SurveyStep, showingRecommender: boolean): string {
-  if (step === 'items') return 'Choose item — Survey';
+  if (step === 'waiting') return 'Waiting for items — Survey';
+  if (step === 'items') return 'Your items — Survey';
   if (step === 'ratings') return 'Rate attributes — Survey';
   if (step === 'intent') return 'Your decision — Survey';
+  if (step === 'visit-complete') return 'Visit complete — Survey';
   if (showingRecommender) return 'Recommendation — Survey';
   return 'Survey complete — Survey';
 }
 
 function stepAnnouncement(step: SurveyStep, showingRecommender: boolean): string {
-  if (step === 'items') return 'Choose an item';
+  if (step === 'waiting') return 'Waiting for your items';
+  if (step === 'items') return 'Select an item from your cart';
   if (step === 'ratings') return 'Step 1 of 3: Rate each attribute for this product';
   if (step === 'intent') return 'Step 2 of 3: Your purchase decision';
+  if (step === 'visit-complete') return 'Visit complete. Thank you.';
   if (showingRecommender) return 'Step 3 of 3: Recommendation';
   return 'Step 3 of 3: Survey complete';
 }
@@ -91,11 +104,25 @@ export function SurveyScaleMulti({
 }: SurveyScaleMultiProps) {
   const [searchParams] = useSearchParams();
   const fittingRoom = getFittingRoom(searchParams);
-  const [step, setStep] = useState<SurveyStep>('items');
-  const [selectedItem, setSelectedItem] = useState<SurveyItem | null>(null);
+  const {
+    cart,
+    status: cartStatus,
+    error: cartError,
+    reload: reloadCart,
+    markItemStatus,
+    finish,
+    touchActivity,
+  } = useFittingRoomCart(fittingRoom);
+
+  const [step, setStep] = useState<SurveyStep>('waiting');
+  const [selectedItem, setSelectedItem] = useState<TryOnItem | null>(null);
+  const [selectedCartItemId, setSelectedCartItemId] = useState<string | null>(
+    null,
+  );
   const [ratings, setRatings] = useState<PartialScaleRatings>({});
   const [response, setResponse] = useState<SurveyCResponse | null>(null);
   const [saving, setSaving] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const [saveOutcome, setSaveOutcome] = useState<PersistOutcome | null>(null);
   const [online, setOnline] = useState(isOnline);
   const [statusMessage, setStatusMessage] = useState('');
@@ -105,6 +132,8 @@ export function SurveyScaleMulti({
   });
   const stepHeadingRef = useRef<HTMLElement | null>(null);
   const prevRatingsComplete = useRef(false);
+  /** Suppress cart→waiting sync while finishing the visit. */
+  const finishingVisitRef = useRef(false);
   // Abandoned when the shopper starts over mid-request.
   const recommenderRequest = useRef<AbortController | null>(null);
   const sizeOptionsRequest = useRef<AbortController | null>(null);
@@ -115,8 +144,52 @@ export function SurveyScaleMulti({
   ).map((axis) => axis.label);
   const continueHelpId = 'continue-ratings-help';
   const progressNow = progressValue(step);
-
   const showingRecommender = recommender !== null;
+  const cartActive = cartStatus === 'ready' && cart !== null;
+  const pendingItems =
+    cart?.items.filter((item) => item.status === 'pending') ?? [];
+
+  const clearItemFlow = () => {
+    recommenderRequest.current?.abort();
+    recommenderRequest.current = null;
+    sizeOptionsRequest.current?.abort();
+    sizeOptionsRequest.current = null;
+    setSelectedItem(null);
+    setSelectedCartItemId(null);
+    setRatings({});
+    setResponse(null);
+    setSaveOutcome(null);
+    setRecommender(null);
+    setSizeOptions({ status: 'loading' });
+    setSaving(false);
+  };
+
+  // Sync survey step with cart presence.
+  useEffect(() => {
+    if (step === 'visit-complete' || finishingVisitRef.current) return;
+
+    if (cartStatus === 'ready' && cart && cart.items.length > 0) {
+      if (step === 'waiting') {
+        setStep('items');
+      }
+      return;
+    }
+
+    // Cart cleared or not yet assigned — return to waiting.
+    if (
+      cartStatus === 'empty' ||
+      cartStatus === 'loading' ||
+      cartStatus === 'error' ||
+      cartStatus === 'unavailable'
+    ) {
+      if (step !== 'waiting') {
+        clearItemFlow();
+        setStep('waiting');
+      }
+    }
+    // clearItemFlow is stable enough for this sync; omit from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartStatus, cart, step]);
 
   useEffect(() => {
     document.title = stepTitle(step, showingRecommender);
@@ -124,7 +197,6 @@ export function SurveyScaleMulti({
 
   useEffect(() => {
     setStatusMessage(stepAnnouncement(step, showingRecommender));
-    // Defer focus until after the new step heading mounts.
     requestAnimationFrame(() => {
       stepHeadingRef.current?.focus();
     });
@@ -147,14 +219,54 @@ export function SurveyScaleMulti({
     };
   }, []);
 
-  const handleItemSelect = (item: SurveyItem) => {
-    setSelectedItem(item);
+  useEffect(
+    () => () => {
+      recommenderRequest.current?.abort();
+      sizeOptionsRequest.current?.abort();
+    },
+    [],
+  );
+
+  const handleItemSelect = (item: CartItem) => {
+    touchActivity();
+    setSelectedCartItemId(item.id);
+    setSelectedItem(cartItemToTryOnItem(item));
     setRatings({});
+    setResponse(null);
+    setSaveOutcome(null);
+    setRecommender(null);
     setStep('ratings');
   };
 
+  const handleSkip = (item: CartItem) => {
+    touchActivity();
+    void markItemStatus(item.id, 'skipped');
+  };
+
   const handleRating = (key: AttributeKey, value: ScaleRating) => {
+    touchActivity();
     setRatings((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const returnToItems = async (markRated: boolean) => {
+    recommenderRequest.current?.abort();
+    recommenderRequest.current = null;
+    sizeOptionsRequest.current?.abort();
+    sizeOptionsRequest.current = null;
+
+    if (markRated && selectedCartItemId) {
+      await markItemStatus(selectedCartItemId, 'rated');
+    }
+
+    setSelectedItem(null);
+    setSelectedCartItemId(null);
+    setRatings({});
+    setResponse(null);
+    setSaveOutcome(null);
+    setRecommender(null);
+    setSizeOptions({ status: 'loading' });
+    setSaving(false);
+    setStep(cartActive ? 'items' : 'waiting');
   };
 
   const handleIntent = async (decision: IntentDecision) => {
@@ -171,6 +283,7 @@ export function SurveyScaleMulti({
       intent: decision,
     };
 
+    touchActivity();
     setSaving(true);
     setSaveOutcome(null);
     setResponse(record);
@@ -179,9 +292,6 @@ export function SurveyScaleMulti({
     setSaving(false);
 
     if (decision === 'NO') {
-      // Show the result screen immediately and stream the alternatives in, so a
-      // cold API host does not leave the shopper on a blank step. Size options
-      // come from Supabase in parallel and usually land first.
       setRecommender({ status: 'loading' });
       setSizeOptions({ status: 'loading' });
       setStep('result');
@@ -190,9 +300,9 @@ export function SurveyScaleMulti({
       return;
     }
 
-    setRecommender(null);
-    setSizeOptions({ status: 'loading' });
-    setStep('result');
+    // YES — mark rated and return to cart item list.
+    setStatusMessage('Saved. Back to your items.');
+    await returnToItems(true);
   };
 
   const handleRetrySave = async () => {
@@ -250,7 +360,7 @@ export function SurveyScaleMulti({
     sizeOptionsRequest.current = controller;
 
     const outcome = await fetchSizeOptions({
-      surveyItemId: record.selected_item,
+      variationId: record.selected_item,
       signal: controller.signal,
     });
 
@@ -258,28 +368,26 @@ export function SurveyScaleMulti({
     setSizeOptions(sizeOptionsFromOutcome(outcome));
   };
 
-  const handleStartOver = () => {
-    recommenderRequest.current?.abort();
-    recommenderRequest.current = null;
-    sizeOptionsRequest.current?.abort();
-    sizeOptionsRequest.current = null;
-    resetSession();
-    setSelectedItem(null);
-    setRatings({});
-    setResponse(null);
-    setSaveOutcome(null);
-    setRecommender(null);
-    setSizeOptions({ status: 'loading' });
-    setStep('items');
+  const handleReturnFromRecommender = () => {
+    void returnToItems(true);
   };
 
-  useEffect(
-    () => () => {
-      recommenderRequest.current?.abort();
-      sizeOptionsRequest.current?.abort();
-    },
-    [],
-  );
+  const handleFinishVisit = async () => {
+    if (finishing) return;
+    touchActivity();
+    finishingVisitRef.current = true;
+    setFinishing(true);
+    const ok = await finish();
+    setFinishing(false);
+    if (!ok) {
+      finishingVisitRef.current = false;
+      setStatusMessage('Could not finish visit. Try again.');
+      return;
+    }
+    clearItemFlow();
+    resetSession();
+    setStep('visit-complete');
+  };
 
   if (step === 'result' && response && selectedItem && recommender) {
     return (
@@ -294,7 +402,15 @@ export function SurveyScaleMulti({
         saving={saving}
         onRetrySave={handleRetrySave}
         retryDisabled={!online}
-        onStartOver={handleStartOver}
+        onStartOver={handleReturnFromRecommender}
+        onActivity={touchActivity}
+        startOverLabel={
+          pendingItems.length > 1 ||
+          (pendingItems.length === 1 &&
+            pendingItems[0]?.id !== selectedCartItemId)
+            ? 'Back to your items'
+            : 'Done with this item'
+        }
         stepHeadingRef={stepHeadingRef}
         statusMessage={statusMessage}
         progressNow={progressNow}
@@ -302,39 +418,48 @@ export function SurveyScaleMulti({
     );
   }
 
-  if (step === 'result' && response && selectedItem) {
-
+  if (step === 'visit-complete') {
     return (
       <Shell background={pageBackground} statusMessage={statusMessage}>
         <main id="main-content" className="survey-main" tabIndex={-1}>
-          <SurveyProgress value={progressNow} />
-          <ProductHeader item={selectedItem} variant={productHeaderVariant} />
-          <h2
+          <h1
             ref={(el) => {
               stepHeadingRef.current = el;
             }}
-            className="visually-hidden"
+            className="item-selection-heading"
             tabIndex={-1}
           >
-            Survey complete
-          </h2>
-          <SaveStatus
-            outcome={saveOutcome}
-            saving={saving}
-            onRetry={
-              saveOutcome?.status === 'error' ? handleRetrySave : undefined
+            Thanks for visiting
+          </h1>
+          <p className="item-selection-subheading" style={{ marginBottom: 24 }}>
+            Fitting room {fittingRoom} is clear. An attendant can assign new
+            items anytime.
+          </p>
+          <Link to="/" className="choice-btn" style={{ display: 'block', textAlign: 'center', fontSize: 18, textDecoration: 'none' }}>
+            Back to start
+          </Link>
+        </main>
+      </Shell>
+    );
+  }
+
+  if (step === 'waiting') {
+    return (
+      <Shell background={pageBackground} statusMessage={statusMessage}>
+        <main id="main-content" className="survey-main survey-main--fill" tabIndex={-1}>
+          <CartWaiting
+            fittingRoom={fittingRoom}
+            status={
+              cartStatus === 'ready' || cartStatus === 'empty'
+                ? 'empty'
+                : cartStatus
             }
-            retryDisabled={!online}
+            error={cartError}
+            onRetry={reloadCart}
+            headingRef={(el) => {
+              stepHeadingRef.current = el;
+            }}
           />
-          <ResponsePreview record={response} />
-          <button
-            type="button"
-            className="choice-btn"
-            style={{ marginTop: 20, width: '100%', fontSize: 18, borderColor: cardBorder }}
-            onClick={handleStartOver}
-          >
-            Start Over
-          </button>
           <Link to="/" className="survey-back-link">
             ← Back to start
           </Link>
@@ -343,13 +468,17 @@ export function SurveyScaleMulti({
     );
   }
 
-  if (step === 'items') {
+  if (step === 'items' && cart) {
     return (
       <Shell background={pageBackground} statusMessage={statusMessage}>
         <main id="main-content" className="survey-main survey-main--fill" tabIndex={-1}>
-          <ItemSelection
+          <CartItemSelection
             variant={itemSelectionVariant}
+            items={cart.items}
             onSelect={handleItemSelect}
+            onSkip={handleSkip}
+            onDone={() => void handleFinishVisit()}
+            finishing={finishing}
             headingRef={(el) => {
               stepHeadingRef.current = el;
             }}
@@ -443,6 +572,16 @@ export function SurveyScaleMulti({
               {INTENT_STEM}
             </p>
             {saving && <SaveStatus outcome={null} saving />}
+            {!saving && saveOutcome && (
+              <SaveStatus
+                outcome={saveOutcome}
+                saving={false}
+                onRetry={
+                  saveOutcome.status === 'error' ? handleRetrySave : undefined
+                }
+                retryDisabled={!online}
+              />
+            )}
             <div
               className="intent-choices"
               role="group"
@@ -453,7 +592,7 @@ export function SurveyScaleMulti({
                 className="choice-btn"
                 style={{ width: '100%', fontSize: 18 }}
                 disabled={saving}
-                onClick={() => handleIntent('YES')}
+                onClick={() => void handleIntent('YES')}
               >
                 {saving ? 'Saving…' : INTENT_LABEL_PURCHASE}
               </button>
@@ -462,7 +601,7 @@ export function SurveyScaleMulti({
                 className="choice-btn"
                 style={{ width: '100%', fontSize: 18 }}
                 disabled={saving}
-                onClick={() => handleIntent('NO')}
+                onClick={() => void handleIntent('NO')}
               >
                 {saving ? 'Saving…' : INTENT_LABEL_LEAVE}
               </button>
@@ -476,6 +615,14 @@ export function SurveyScaleMulti({
             </button>
           </div>
         )}
+
+        <button
+          type="button"
+          className="text-btn"
+          onClick={() => void returnToItems(false)}
+        >
+          Back to your items
+        </button>
 
         <Link to="/" className="survey-back-link">
           ← Back to start

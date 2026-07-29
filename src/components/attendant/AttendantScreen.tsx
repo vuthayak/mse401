@@ -9,9 +9,17 @@ import {
   type ConnectionMode,
   type RequestStatus,
 } from '../../lib/attendantQueue';
+import {
+  clearRoomCart,
+  fetchRoomCarts,
+  subscribeToCarts,
+  type FittingRoomCart,
+} from '../../lib/carts';
 import { FITTING_ROOM_MAX, FITTING_ROOM_MIN } from '../../lib/fittingRoom';
 import { usePrefersReducedMotion } from '../../lib/motion';
+import { CheckInPanel } from './CheckInPanel';
 import { RequestCard, type ExitDirection } from './RequestCard';
+import { RoomCartCard } from './RoomCartCard';
 import { RoomStrip, type RoomFilter } from './RoomStrip';
 
 const RECENT_LIMIT = 8;
@@ -42,19 +50,48 @@ function haptic(reducedMotion: boolean) {
 export function AttendantScreen() {
   const reducedMotion = usePrefersReducedMotion();
   const [requests, setRequests] = useState<AttendantRequest[]>([]);
+  const [carts, setCarts] = useState<FittingRoomCart[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [cartLoadError, setCartLoadError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const [connection, setConnection] = useState<ConnectionMode>('connecting');
   const [roomFilter, setRoomFilter] = useState<RoomFilter>('all');
   const [now, setNow] = useState(() => Date.now());
   const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [clearingRooms, setClearingRooms] = useState<Record<number, boolean>>(
+    {},
+  );
+  const [clearErrors, setClearErrors] = useState<Record<number, string>>({});
   const [exitDirs, setExitDirs] = useState<Record<string, ExitDirection>>({});
   const [enterDirs, setEnterDirs] = useState<Record<string, ExitDirection>>({});
   const [announce, setAnnounce] = useState('');
   const knownIds = useRef<Set<string>>(new Set());
   const initialLoad = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
+  const cartsAbortRef = useRef<AbortController | null>(null);
+
+  const loadCarts = useCallback(async () => {
+    cartsAbortRef.current?.abort();
+    const controller = new AbortController();
+    cartsAbortRef.current = controller;
+
+    const outcome = await fetchRoomCarts('kw-flagship', controller.signal);
+    if (controller.signal.aborted) return;
+
+    if (outcome.status === 'unavailable') {
+      setCarts([]);
+      setCartLoadError(null);
+      return;
+    }
+    if (outcome.status === 'error') {
+      setCartLoadError(outcome.message);
+      return;
+    }
+
+    setCartLoadError(null);
+    setCarts(outcome.carts);
+  }, []);
 
   const refresh = useCallback(async () => {
     abortRef.current?.abort();
@@ -106,17 +143,28 @@ export function AttendantScreen() {
 
   useEffect(() => {
     void refresh();
-    const handle = subscribeToRequests({
+    void loadCarts();
+    const requestsHandle = subscribeToRequests({
       onChange: () => {
         void refresh();
       },
       onConnectionChange: setConnection,
     });
+    const cartsHandle = subscribeToCarts({
+      onChange: () => {
+        void loadCarts();
+      },
+      onConnectionChange: () => {
+        // Connection badge stays on the requests subscription.
+      },
+    });
     return () => {
-      handle.unsubscribe();
+      requestsHandle.unsubscribe();
+      cartsHandle.unsubscribe();
       abortRef.current?.abort();
+      cartsAbortRef.current?.abort();
     };
-  }, [refresh]);
+  }, [refresh, loadCarts]);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), TICK_MS);
@@ -151,10 +199,29 @@ export function AttendantScreen() {
     return counts;
   }, [pending]);
 
+  const cartCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const cart of carts) {
+      counts[cart.fittingRoom] = cart.items.length;
+    }
+    return counts;
+  }, [carts]);
+
+  const occupiedRooms = useMemo(() => {
+    return new Set(carts.map((c) => c.fittingRoom));
+  }, [carts]);
+
   const visiblePending = useMemo(() => {
     if (roomFilter === 'all') return pending;
     return pending.filter((r) => r.fittingRoom === roomFilter);
   }, [pending, roomFilter]);
+
+  const visibleCarts = useMemo(() => {
+    if (roomFilter === 'all') return carts;
+    return carts.filter((c) => c.fittingRoom === roomFilter);
+  }, [carts, roomFilter]);
+
+  const checkInDefaultRoom = roomFilter === 'all' ? 2 : roomFilter;
 
   const applyOptimistic = useCallback(
     (id: string, nextStatus: RequestStatus) => {
@@ -230,6 +297,47 @@ export function AttendantScreen() {
     [applyOptimistic, reducedMotion],
   );
 
+  const handleClearRoom = useCallback(
+    async (room: number) => {
+      const previous = carts;
+      setClearingRooms((prev) => ({ ...prev, [room]: true }));
+      setClearErrors((prev) => {
+        const next = { ...prev };
+        delete next[room];
+        return next;
+      });
+      setCarts((prev) => prev.filter((c) => c.fittingRoom !== room));
+      haptic(reducedMotion);
+
+      const outcome = await clearRoomCart(room);
+      setClearingRooms((prev) => {
+        const next = { ...prev };
+        delete next[room];
+        return next;
+      });
+
+      if (outcome.status === 'error') {
+        setCarts(previous);
+        setClearErrors((prev) => ({ ...prev, [room]: outcome.message }));
+        setAnnounce(`Could not clear room ${room}. Try again.`);
+        haptic(reducedMotion);
+        return;
+      }
+      if (outcome.status === 'skipped') {
+        setCarts(previous);
+        setClearErrors((prev) => ({
+          ...prev,
+          [room]: 'Could not clear room — Supabase is not configured.',
+        }));
+        return;
+      }
+
+      setAnnounce(`Cleared cart for fitting room ${room}.`);
+      void loadCarts();
+    },
+    [carts, loadCarts, reducedMotion],
+  );
+
   const pendingCount = pending.length;
 
   return (
@@ -276,9 +384,20 @@ export function AttendantScreen() {
         <main id="main-content" className="attendant-main" tabIndex={-1}>
           <RoomStrip
             counts={roomCounts}
+            cartCounts={cartCounts}
+            occupiedRooms={occupiedRooms}
             selected={roomFilter}
             onSelect={setRoomFilter}
             reducedMotion={reducedMotion}
+          />
+
+          <CheckInPanel
+            defaultRoom={checkInDefaultRoom}
+            onAssigned={() => {
+              setAnnounce('Cart assigned to fitting room.');
+              void loadCarts();
+            }}
+            disabled={unavailable}
           />
 
           {unavailable && (
@@ -300,6 +419,45 @@ export function AttendantScreen() {
               </button>
             </p>
           )}
+
+          {cartLoadError && (
+            <p className="attendant-banner attendant-banner--error" role="alert">
+              {cartLoadError}{' '}
+              <button
+                type="button"
+                className="attendant-retry"
+                onClick={() => void loadCarts()}
+              >
+                Retry
+              </button>
+            </p>
+          )}
+
+          <section className="attendant-carts" aria-label="Room carts">
+            <h2 className="attendant-section-title">Room carts</h2>
+            {visibleCarts.length === 0 ? (
+              <p className="attendant-empty">
+                No active carts
+                {roomFilter === 'all'
+                  ? ' — all rooms are empty.'
+                  : ` in room ${roomFilter}.`}
+              </p>
+            ) : (
+              <ul className="attendant-carts-list">
+                {visibleCarts.map((cart) => (
+                  <li key={cart.id}>
+                    <RoomCartCard
+                      cart={cart}
+                      now={now}
+                      clearing={Boolean(clearingRooms[cart.fittingRoom])}
+                      error={clearErrors[cart.fittingRoom] ?? null}
+                      onClear={(room) => void handleClearRoom(room)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
           <section
             className="attendant-queue"
