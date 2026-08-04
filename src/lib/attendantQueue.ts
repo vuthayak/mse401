@@ -184,6 +184,53 @@ export async function setRequestStatus(
   }
 }
 
+/**
+ * Deletes all item_requests for a store (pending + handled). Demo reset only.
+ */
+export async function clearRoomRequests(
+  storeId = 'kw-flagship',
+): Promise<PersistOutcome> {
+  if (!isSupabaseConfigured()) {
+    return { status: 'skipped', reason: 'not_configured' };
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    return { status: 'skipped', reason: 'not_configured' };
+  }
+
+  if (!isOnline()) {
+    return { status: 'error', message: new OfflineError().message };
+  }
+
+  try {
+    const deleted = await withRetry(async (signal) => {
+      const { data, error } = await supabase
+        .rpc('clear_room_requests', { p_store_id: storeId })
+        .abortSignal(signal);
+
+      if (error) throw error;
+      return data;
+    });
+
+    return {
+      status: 'saved',
+      recordId: String(deleted ?? 0),
+    };
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error('clear_room_requests_error', error);
+    }
+    return {
+      status: 'error',
+      message: errorMessage(error, 'Could not clear requests'),
+    };
+  }
+}
+
+const REALTIME_TIMEOUT_MS = 5000;
+const POLL_INTERVAL_MS = 4000;
+
 export interface SubscribeOptions {
   onChange: () => void;
   onConnectionChange: (mode: ConnectionMode) => void;
