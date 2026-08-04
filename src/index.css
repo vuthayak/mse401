@@ -2626,41 +2626,6 @@ a.insights-crumb:focus-visible {
   font-weight: 600;
 }
 
-.attendant-reset {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2.5rem;
-  padding: 0.4rem 0.85rem;
-  border-radius: 0.5rem;
-  border: 1.5px solid var(--insights-border);
-  background: var(--insights-surface);
-  color: var(--insights-text-secondary);
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: 560;
-  cursor: pointer;
-}
-
-.attendant-reset:hover:not(:disabled) {
-  color: var(--insights-text);
-  border-color: var(--insights-border-strong);
-}
-
-.attendant-reset:active:not(:disabled) {
-  transform: scale(0.97);
-  transition: transform 100ms ease-out;
-}
-
-.attendant-reset:focus-visible {
-  outline: none;
-  box-shadow: var(--insights-focus-ring);
-}
-
-.attendant-reset:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 .attendant-back:active {
   transform: scale(0.97);
   transition: transform 100ms ease-out;
@@ -3605,7 +3570,6 @@ a.insights-crumb:focus-visible {
   .insights-combo-point,
   .attendant-action,
   .attendant-back,
-  .attendant-reset,
   .attendant-room-tile,
   .attendant-retry,
   .attendant-checkin-toggle,
@@ -3623,7 +3587,6 @@ a.insights-crumb:focus-visible {
   a.insights-crumb:active,
   .attendant-action:active:not(:disabled),
   .attendant-back:active,
-  .attendant-reset:active:not(:disabled),
   .attendant-room-tile:active,
   .attendant-retry:active,
   .attendant-checkin-toggle:active,
