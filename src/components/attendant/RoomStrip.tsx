@@ -9,6 +9,10 @@ interface RoomStripProps {
   selected: RoomFilter;
   onSelect: (room: RoomFilter) => void;
   reducedMotion: boolean;
+  /** Rooms with an active cart (shows a subtle occupied indicator). */
+  occupiedRooms?: ReadonlySet<number>;
+  /** Optional per-room cart item counts; falls back to a dot when occupied. */
+  cartCounts?: Record<number, number>;
 }
 
 const ROOMS = Array.from(
@@ -21,7 +25,14 @@ export function RoomStrip({
   selected,
   onSelect,
   reducedMotion,
+  occupiedRooms,
+  cartCounts,
 }: RoomStripProps) {
+  const cartOccupiedTotal = ROOMS.reduce((sum, r) => {
+    if (cartCounts) return sum + (cartCounts[r] ?? 0);
+    return sum + (occupiedRooms?.has(r) ? 1 : 0);
+  }, 0);
+
   return (
     <div className="attendant-room-strip" role="tablist" aria-label="Fitting rooms">
       <button
@@ -45,11 +56,22 @@ export function RoomStrip({
         <span className="attendant-room-tile-count">
           {ROOMS.reduce((sum, r) => sum + (counts[r] ?? 0), 0)}
         </span>
+        {cartOccupiedTotal > 0 && (
+          <span
+            className="attendant-room-cart-badge"
+            aria-label={`${cartOccupiedTotal} cart item${cartOccupiedTotal === 1 ? '' : 's'} across rooms`}
+          >
+            {cartCounts ? cartOccupiedTotal : '●'}
+          </span>
+        )}
       </button>
 
       {ROOMS.map((room) => {
         const count = counts[room] ?? 0;
         const isSelected = selected === room;
+        const cartCount = cartCounts?.[room] ?? 0;
+        const occupied =
+          cartCount > 0 || (occupiedRooms?.has(room) ?? false);
         return (
           <button
             key={room}
@@ -60,6 +82,7 @@ export function RoomStrip({
               'attendant-room-tile',
               isSelected ? 'attendant-room-tile--selected' : '',
               count === 0 ? 'attendant-room-tile--clear' : '',
+              occupied ? 'attendant-room-tile--occupied' : '',
             ]
               .filter(Boolean)
               .join(' ')}
@@ -79,6 +102,18 @@ export function RoomStrip({
             <span className="attendant-room-tile-count">
               {count === 0 ? 'Clear' : count}
             </span>
+            {occupied && (
+              <span
+                className="attendant-room-cart-badge"
+                aria-label={
+                  cartCount > 0
+                    ? `${cartCount} cart item${cartCount === 1 ? '' : 's'}`
+                    : 'Cart occupied'
+                }
+              >
+                {cartCount > 0 ? cartCount : '●'}
+              </span>
+            )}
           </button>
         );
       })}

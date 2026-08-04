@@ -1,3 +1,6 @@
+import type { CartItem } from '../lib/carts';
+import { catalogImageUrl } from '../lib/recommendItem';
+
 export type IntentDecision = 'YES' | 'NO';
 
 export type ScaleRating = 1 | 2 | 3 | 4 | 5;
@@ -9,6 +12,43 @@ export interface SurveyItem {
   title: string;
   tagline: string;
   imageUrl: string;
+}
+
+/** Minimal product fields shared by SurveyItem and TryOnItem (headers, etc.). */
+export interface ProductDisplayItem {
+  id: string;
+  title: string;
+  tagline: string;
+  imageUrl: string;
+}
+
+/** Catalog variation tried on via a fitting-room cart (Survey C). */
+export interface TryOnItem {
+  id: string; // variation_id — used as selected_item
+  title: string;
+  tagline: string;
+  imageUrl: string;
+  variationId: string;
+  brand: string;
+  colorLabel: string;
+  size: string;
+  imagePath: string;
+  unitPrice: number;
+}
+
+export function cartItemToTryOnItem(item: CartItem): TryOnItem {
+  return {
+    id: item.variationId,
+    title: item.title,
+    tagline: `${item.brand} · ${item.colorLabel} · Size ${item.size}`,
+    imageUrl: catalogImageUrl(item.imagePath),
+    variationId: item.variationId,
+    brand: item.brand,
+    colorLabel: item.colorLabel,
+    size: item.size,
+    imagePath: item.imagePath,
+    unitPrice: item.unitPrice,
+  };
 }
 
 function itemImage(filename: string): string {
