@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, MotionConfig } from 'motion/react';
 import {
-  clearRoomRequests,
   fetchRoomRequests,
   setRequestStatus,
   subscribeToRequests,
@@ -67,7 +66,6 @@ export function AttendantScreen() {
   const [exitDirs, setExitDirs] = useState<Record<string, ExitDirection>>({});
   const [enterDirs, setEnterDirs] = useState<Record<string, ExitDirection>>({});
   const [announce, setAnnounce] = useState('');
-  const [resetting, setResetting] = useState(false);
   const knownIds = useRef<Set<string>>(new Set());
   const initialLoad = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
@@ -299,38 +297,6 @@ export function AttendantScreen() {
     [applyOptimistic, reducedMotion],
   );
 
-  const handleResetDemo = useCallback(async () => {
-    const confirmed = window.confirm(
-      'Clear all open and handled requests? This cannot be undone.',
-    );
-    if (!confirmed) return;
-
-    setResetting(true);
-    const outcome = await clearRoomRequests('kw-flagship');
-    setResetting(false);
-
-    if (outcome.status === 'error') {
-      setLoadError(outcome.message);
-      setAnnounce('Could not reset demo. Try again.');
-      haptic(reducedMotion);
-      return;
-    }
-
-    if (outcome.status === 'skipped') {
-      setAnnounce('Supabase is not configured. Nothing to clear.');
-      return;
-    }
-
-    setRequests([]);
-    setBusyIds({});
-    setErrors({});
-    setExitDirs({});
-    setEnterDirs({});
-    setLoadError(null);
-    knownIds.current = new Set();
-    setAnnounce('Demo reset. All requests cleared.');
-    await refresh();
-  }, [reducedMotion, refresh]);
   const handleClearRoom = useCallback(
     async (room: number) => {
       const previous = carts;
@@ -408,14 +374,6 @@ export function AttendantScreen() {
                 <span className="attendant-connection-dot" aria-hidden="true" />
                 {connectionLabel(connection)}
               </span>
-              <button
-                type="button"
-                className="attendant-reset"
-                disabled={resetting || unavailable}
-                onClick={() => void handleResetDemo()}
-              >
-                {resetting ? 'Resetting…' : 'Reset demo'}
-              </button>
               <Link to="/" className="attendant-back">
                 ← Home
               </Link>
