@@ -105,6 +105,7 @@ a {
 .choice-btn:focus-visible,
 .scale-option:focus-visible,
 .landing-card:focus-visible,
+.landing-archive-link:focus-visible,
 .survey-back-link:focus-visible,
 .text-btn:focus-visible {
   outline: 3px solid #666;
@@ -777,6 +778,26 @@ a {
 
 .landing-card--secondary .landing-card-label {
   font-size: 18px;
+}
+
+.landing-archive-links {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+  display: flex;
+  gap: 12px;
+}
+
+.landing-archive-link {
+  font-size: 12px;
+  color: #999;
+  text-decoration: none;
+}
+
+.landing-archive-link:hover {
+  color: #666;
+  text-decoration: underline;
 }
 
 .survey-back-link {

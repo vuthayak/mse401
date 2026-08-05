@@ -40,6 +40,14 @@ export function Landing() {
           </Link>
         </nav>
       </main>
+      <nav className="landing-archive-links" aria-label="Archived survey variants">
+        <Link to="/survey-a" className="landing-archive-link">
+          Survey A
+        </Link>
+        <Link to="/survey-b" className="landing-archive-link">
+          Survey B
+        </Link>
+      </nav>
       <footer className="privacy-footer">
         Anonymous session — no personal data collected
       </footer>
