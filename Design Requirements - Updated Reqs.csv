@@ -1,0 +1,86 @@
+,,,,,,,,,
+ID,Category,Functional / Non-Functional,Requirement Statement,Priority,Story Points,Validation/Rationale,Acceptance Criteria,Progress,Source User Story
+"FR-01a 
+
+Added July 1st, 2026",Recommendation Engine,Functional,The system shall detect a shopper's dislike/rejection signal on an item and initiate the recommendation process.,1,5,Author 'Fit Happens' notes 75% of shoppers leave if they must re-dress to find a new size; recommendations keep them engaged.,"A dislike signal on an item triggers recommendation generation within 5 seconds, in 100% of test trials.","Built, part of survey MVP","As a shopper, I want to see item recommendations after rating a product so that I can discover alternatives without leaving the fitting room."
+"FR-01b
+
+Added July 1st, 2026",Recommendation Engine,Functional,The system shall generate a set of alternative item recommendations based on the rejected item.,1,13,Author 'Fit Happens' notes 75% of shoppers leave if they must re-dress to find a new size; recommendations keep them engaged.,"System displays up to 3 recommended items per dislike signal, ranked by relevance to the rejected item.",MVP built with mock data,"As a shopper, I want to see item recommendations after rating a product so that I can discover alternatives without leaving the fitting room."
+"FR-01c
+
+Added July 1st, 2026",Recommendation Engine,Functional,The system shall filter generated recommendations to include only in-stock items.,1,8,Author 'Fit Happens' notes 75% of shoppers leave if they must re-dress to find a new size; recommendations keep them engaged.,100% of displayed recommendations correspond to items with in-stock status at the time of display.,"Almost complete, using mock inventory","As a shopper, I want to see item recommendations after rating a product so that I can discover alternatives without leaving the fitting room."
+"FR-01d 
+
+Added July 1st, 2026",Recommendation Engine,Functional,The system shall display recommended items to the shopper on the fitting-room tablet.,1,8,Author 'Fit Happens' notes 75% of shoppers leave if they must re-dress to find a new size; recommendations keep them engaged.,"Recommendations appear on the tablet within 5 seconds of the dislike signal, with no action required from the shopper.",MVP built with mock data,"As a shopper, I want to see item recommendations after rating a product so that I can discover alternatives without leaving the fitting room."
+"FR-02a
+
+Added July 1st, 2026",Session & Conversion Analytics,Functional,The system shall assign a unique session identifier linking a shopper's cart to a specific fitting room and time window.,1,4,"Physical stores currently lose all data between product consideration and final purchase, the core 'black box' gap this project addresses.","Every fitting-room visit generates exactly one session ID, persisting for the duration of that visit.","Not started, needs partner data access","As a retail analyst, I want try-on and purchase data matched per session so that I can calculate true fitting-room conversion rates."
+"FR-02b
+
+Added July 1st, 2026",Session & Conversion Analytics,Functional,The system shall match cart data with the corresponding POS purchase record for each session.,1,6,"Physical stores currently lose all data between product consideration and final purchase, the core 'black box' gap this project addresses.",Cart-to-purchase matches are accurate to at least 95% when checked against a manual reconciliation sample.,"Not started, needs partner POS access","As a retail analyst, I want try-on and purchase data matched per session so that I can calculate true fitting-room conversion rates."
+"FR-02c
+
+Added July 1st, 2026",Session & Conversion Analytics,Functional,"The system shall calculate fitting-room conversion rate, queryable by item, and date range.",1,3,"Physical stores currently lose all data between product consideration and final purchase, the core 'black box' gap this project addresses.","Conversion rate can be retrieved for any combination of item, date range, and location, matching an independent manual calculation.","Built, logic complete, using mock data","As a retail analyst, I want try-on and purchase data matched per session so that I can calculate true fitting-room conversion rates."
+"FR-03
+
+Unchanged Requirement",Data Capture at Try-On,Functional,The system shall register each scanned item to the correct fitting room's digital cart.,1,5,15–19% of customers abandon queues longer than 8 people; any added friction at the fitting-room entrance risks walk-offs.,"Across 10 consecutive scan events, every item appears in the correct room's cart within 3 seconds, with zero misassignments.","Almost complete, simulated scans","As a fitting-room attendant, I want items scanned into a digital cart quickly so that customer wait times are not worsened."
+"FR-04a
+
+Added July 1st, 2026",Data Capture at Try-On,Functional,"The system shall let a shopper rate item attributes (fit, material, colour) for a tried-on item.",1,5,Retailer interviews confirm 3+ rejection signals per visit are currently lost; shopper form shows ease-of-use is the top-ranked attribute.,"Attribute ratings for fit, material, and colour are captured for one item in under 1 minute, confirmed in usability testing with 5 users.",Survey MVP built,"As a shopper, I want to rate item attributes (fit, material, colour) in a few taps so that I can give feedback without disrupting my try-on."
+"FR-04b
+
+Added July 1st, 2026",Data Capture at Try-On,Functional,The system shall capture the shopper's purchase intent for each tried-on item.,1,3,Retailer interviews confirm 3+ rejection signals per visit are currently lost; shopper form shows ease-of-use is the top-ranked attribute.,Purchase intent is recorded alongside attribute ratings for every rated item in the same session.,Survey MVP built,"As a shopper, I want to rate item attributes (fit, material, colour) in a few taps so that I can give feedback without disrupting my try-on."
+"FR-05a
+
+Added July 1st, 2026",Session & Conversion Analytics,Functional,The system shall display try-on count and conversion rate per SKU on the manager dashboard.,1,3,"All interviewed retailers (Lululemon, Roots, RW&Co, Mountain Warehouse) escalate product feedback only conversationally, no structured data reaches HQ.",Try-on count and conversion rate for each SKU are visible on the dashboard within 3 seconds of load.,Dashboard MVP built with mock data,"As a retail manager, I want a dashboard showing try-on volume and conversion by product so that I can act on fitting-room insights."
+"FR-05b
+
+Added July 1st, 2026",Session & Conversion Analytics,Functional,The system shall display the top-rejected attributes for each SKU on the dashboard.,1,3,"All interviewed retailers (Lululemon, Roots, RW&Co, Mountain Warehouse) escalate product feedback only conversationally, no structured data reaches HQ.","The top 3 most-rejected attributes are shown per SKU, ranked by rejection frequency.",Dashboard MVP built with mock data,"As a retail manager, I want a dashboard showing try-on volume and conversion by product so that I can act on fitting-room insights."
+"FR-05c
+
+Added July 1st, 2026",Session & Conversion Analytics,Functional,The system shall let the dashboard be filtered by date range and product category.,1,2,"All interviewed retailers (Lululemon, Roots, RW&Co, Mountain Warehouse) escalate product feedback only conversationally, no structured data reaches HQ.",Applying a date range or category filter updates the dashboard view within 3 seconds.,Built,"As a retail manager, I want a dashboard showing try-on volume and conversion by product so that I can act on fitting-room insights."
+"FR-06
+
+Unchanged Requirement",Shopper & Attendant Experience,Functional,"The system shall let an attendant manually end a session, and automatically end an inactive session.",1,3,Essential for data integrity; prevents mixing data from two different shoppers and ensures the tablet is a blank slate for privacy.,A manual 'End Session' action clears the room's tablet within 2 seconds; an inactive session clears automatically after 10 minutes with no attendant action.,Built,"As a fitting-room attendant, I want to manually clear a room's digital session, or have it auto-timeout, so that the tablet is ready for the next shopper."
+"FR-07
+
+Unchanged Requirement",Shopper & Attendant Experience,Functional,"The system shall let a shopper request a different size from the tablet, notifying the attendant.",2,5,Fit Happens' study: customers are 75% likely to abandon a try-on if they must redress to search for a new size themselves.,The attendant receives the size request within 5 seconds; the shopper sees an on-screen confirmation once it is acknowledged.,Almost complete,"As a shopper, I want to request a different size from the tablet so that I do not have to leave the fitting room to find it."
+"FR-08a
+
+Added July 1st, 2026",Session & Conversion Analytics,Functional,The system shall rank item attributes by rejection frequency for each SKU.,2,5,"Current online reviews arrive weeks post-purchase and represent a small, polarised subset; fitting-room data captures in-the-moment sentiment.","A buyer can view attributes ranked by rejection frequency for any SKU, updated within 24 hours of new data.",Dashboard MVP built with mock data,"As a retail buyer, I want to see which item attributes are most frequently disliked so that I can prioritise product adjustments."
+"FR-08b
+
+Added July 1st, 2026",Session & Conversion Analytics,Functional,The system shall let attribute rejection data be exported as CSV.,2,3,"Current online reviews arrive weeks post-purchase and represent a small, polarised subset; fitting-room data captures in-the-moment sentiment.",A buyer can export the current ranked attribute view as a CSV file containing all visible data.,Built,"As a retail buyer, I want to see which item attributes are most frequently disliked so that I can prioritise product adjustments."
+"FR-09
+
+Unchanged Requirement",Shopper & Attendant Experience,Functional,The system shall display live occupancy status for each fitting room on the attendant dashboard.,2,5,Retailer interviews show fitting-room management is currently done by observation; 39% of shoppers feel frustrated by the existing experience.,Occupancy status (occupied/available) for each room updates within 10 seconds of a change in state.,"Almost complete, using mock data","As a store manager, I want to view live fitting-room occupancy from the attendant dashboard so that I can manage staffing in real time."
+"FR-10
+
+Removed, out of scope - July 15, 2026",,Functional,The system shall let an analyst compare conversion rates across fitting rooms and store locations.,2,8,Industry benchmark conversion from fitting room to cashier is 67%; knowing which rooms underperform directs targeted action.,"An analyst can select two or more rooms/locations and view a side-by-side conversion comparison, rendered within 3 seconds and exportable.","Almost complete, using mock data","As a retail analyst, I want to compare conversion rates across fitting rooms and store locations so that I can identify performance outliers."
+"FR-11
+
+Unchanged Requirement",Session & Conversion Analytics,Functional,The system shall track and display average dwell time per item and per fitting room.,3,5,Alert Technologies benchmark: deviations from the 5m 45s average signal engagement or comfort issues in specific rooms or with specific items.,Average dwell time per item and per room is available within 24 hours of data collection; values deviating from the 5m45s benchmark are visually flagged.,Built,"As a retail analyst, I want to track average time spent per item in the fitting room so that I can benchmark against the 5m 45s industry average."
+"FR-12
+
+Unchanged Requirement",Session & Conversion Analytics,Functional,The system shall let a retail manager export fitting-room reports as CSV or PDF.,3,3,"RW&Co interview: a monthly form is submitted to HQ requesting specific feedback, a structured export replaces this manual process.",An export completes within 10 seconds and includes all currently visible filters and the selected date range.,Built,"As a retail manager, I want to export fitting-room reports as CSV or PDF so that I can share insights with corporate buyers."
+"NFR-01
+
+Unchanged Requirement","Trust, Performance & Scale",Non-Functional,Session data shall be collected and stored without any personally identifiable information.,1,5,Privacy concerns are cited as a top barrier to sharing personal information in-store; 74% of consumers are willing if data use is transparent.,No PII fields are present in the session data schema; records are keyed only by fitting-room ID and timestamp.,"Built, schema designed","As a shopper, I want my fitting-room session data collected anonymously so that I feel safe using the system."
+"NFR-02
+
+Unchanged Requirement","Trust, Performance & Scale",Non-Functional,The tablet interface shall become fully interactive within 3 seconds on a standard store network connection.,1,3,Oak Labs' 90% engagement rate depended on seamless in-room technology; slow load times would immediately deter use.,"The tablet UI is fully interactive within 3 seconds on a 10 Mbps connection, confirmed across repeated test runs.","Not started, needs real deployment","As a retailer, I want the tablet interface to load within 3 seconds on a standard store Wi-Fi connection so that shoppers are not left waiting."
+"NFR-03
+
+Unchanged Requirement","Trust, Performance & Scale",Non-Functional,The system shall integrate with existing retailer POS systems without requiring custom hardware beyond a tablet and a standard barcode scanner.,2,5,Oak Labs' failure case shows expensive custom hardware (RFID + smart mirrors) prevented scaling; keeping hardware minimal is essential.,The system successfully reconciles POS transactions with fitting-room sessions using existing retailer POS infrastructure without requiring additional hardware beyond a tablet and barcode scanner.,"Not started, pending partner","As a retailer, I want the system to integrate with my existing POS without custom hardware beyond a tablet so that implementation cost stays low."
+"NFR-04
+
+Unchanged Requirement","Trust, Performance & Scale",Non-Functional,The tablet UI shall conform to WCAG 2.1 Level AA accessibility standards.,2,3,Shopper form shows 'ease of use and intuitiveness' is the top-cited interface attribute; accessibility underpins usable design.,"All interactive elements are reachable by keyboard and touch, and colour contrast meets a minimum ratio of 4.5:1.",Built,"As a retailer, I want the tablet UI to meet WCAG 2.1 AA accessibility standards so that all shoppers can use it independently."
+"NFR-05
+
+Unchanged Requirement","Trust, Performance & Scale",Non-Functional,The system shall store and process data in compliance with PIPEDA and GDPR.,2,3,Data privacy is a named concern in shopper research; retailers will require compliance guarantees before adoption.,"Documented data residency, retention, and deletion practices pass a compliance checklist aligned to PIPEDA and GDPR.","Not started, pending partner","As a retailer, I want all system data stored and processed in compliance with PIPEDA/GDPR so that I have no legal exposure."
+"NFR-06
+
+Unchanged Requirement","Trust, Performance & Scale",Non-Functional,The system shall support scaling from a single-room pilot to a full multi-room rollout.,3,3,Under Armour's connected fitting-room pilot model demonstrates that incremental rollout is the standard adoption path for in-store tech.,The system operates correctly with both single-room and multi-room deployments using the same application build and configuration.,"Not started, pending partner","As a retailer, I want the system to support a pilot deployment of 1-5 fitting rooms before a full rollout so that adoption risk stays low."
+"NFR-07
+
+Unchanged Requirement","Trust, Performance & Scale",Non-Functional,The system shall preserve session data through brief interruptions in store network connectivity.,3,3,Physical store environments have unreliable connectivity; data loss during a session would erode retailer trust in the system.,No session data is lost during a simulated network interruption of up to 10 minutes; all data is present after reconnection.,Almost complete,"As a retailer, I want the system to function if the store Wi-Fi drops briefly so that a network interruption does not lose session data."

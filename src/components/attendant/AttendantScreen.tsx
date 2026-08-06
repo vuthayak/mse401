@@ -15,6 +15,11 @@ import {
   subscribeToCarts,
   type FittingRoomCart,
 } from '../../lib/carts';
+import {
+  emptyDwellIndex,
+  fetchDwellStats,
+  type DwellStatsIndex,
+} from '../../lib/dwellTime';
 import { FITTING_ROOM_MAX, FITTING_ROOM_MIN } from '../../lib/fittingRoom';
 import { usePrefersReducedMotion } from '../../lib/motion';
 import { CheckInPanel } from './CheckInPanel';
@@ -51,6 +56,8 @@ export function AttendantScreen() {
   const reducedMotion = usePrefersReducedMotion();
   const [requests, setRequests] = useState<AttendantRequest[]>([]);
   const [carts, setCarts] = useState<FittingRoomCart[]>([]);
+  const [dwellIndex, setDwellIndex] =
+    useState<DwellStatsIndex>(emptyDwellIndex);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [cartLoadError, setCartLoadError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
@@ -70,6 +77,21 @@ export function AttendantScreen() {
   const initialLoad = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
   const cartsAbortRef = useRef<AbortController | null>(null);
+  const dwellAbortRef = useRef<AbortController | null>(null);
+
+  const loadDwellStats = useCallback(async () => {
+    dwellAbortRef.current?.abort();
+    const controller = new AbortController();
+    dwellAbortRef.current = controller;
+
+    const outcome = await fetchDwellStats('kw-flagship', controller.signal);
+    if (controller.signal.aborted) return;
+
+    // Dwell stats are best-effort — never block carts on failure.
+    if (outcome.status === 'ok') {
+      setDwellIndex(outcome.index);
+    }
+  }, []);
 
   const loadCarts = useCallback(async () => {
     cartsAbortRef.current?.abort();
@@ -144,6 +166,7 @@ export function AttendantScreen() {
   useEffect(() => {
     void refresh();
     void loadCarts();
+    void loadDwellStats();
     const requestsHandle = subscribeToRequests({
       onChange: () => {
         void refresh();
@@ -153,6 +176,7 @@ export function AttendantScreen() {
     const cartsHandle = subscribeToCarts({
       onChange: () => {
         void loadCarts();
+        void loadDwellStats();
       },
       onConnectionChange: () => {
         // Connection badge stays on the requests subscription.
@@ -163,8 +187,9 @@ export function AttendantScreen() {
       cartsHandle.unsubscribe();
       abortRef.current?.abort();
       cartsAbortRef.current?.abort();
+      dwellAbortRef.current?.abort();
     };
-  }, [refresh, loadCarts]);
+  }, [refresh, loadCarts, loadDwellStats]);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), TICK_MS);
@@ -396,6 +421,7 @@ export function AttendantScreen() {
             onAssigned={() => {
               setAnnounce('Cart assigned to fitting room.');
               void loadCarts();
+              void loadDwellStats();
             }}
             disabled={unavailable}
           />
@@ -451,6 +477,8 @@ export function AttendantScreen() {
                       now={now}
                       clearing={Boolean(clearingRooms[cart.fittingRoom])}
                       error={clearErrors[cart.fittingRoom] ?? null}
+                      roomDwell={dwellIndex.byRoom.get(cart.fittingRoom) ?? null}
+                      itemDwellByVariation={dwellIndex.byItem}
                       onClear={(room) => void handleClearRoom(room)}
                     />
                   </li>
