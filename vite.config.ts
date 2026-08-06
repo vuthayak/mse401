@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 // GitHub Pages project site: https://<user>.github.io/mse401/
@@ -6,4 +6,10 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
   base: mode === 'production' ? '/mse401/' : '/',
+  test: {
+    environment: 'jsdom',
+    globals: false,
+    setupFiles: ['./src/test/setup.ts'],
+    restoreMocks: true,
+  },
 }))

@@ -3514,6 +3514,61 @@ a.insights-crumb:focus-visible {
   color: var(--insights-text-secondary);
 }
 
+.attendant-dwell-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.75rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--insights-border);
+  background: var(--insights-surface);
+  color: var(--insights-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.attendant-dwell-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.attendant-dwell-flag--inline {
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+
+.attendant-dwell-chip--quick,
+.attendant-dwell-chip--quick .attendant-dwell-flag,
+.attendant-dwell-flag.attendant-dwell-chip--quick {
+  border-color: var(--insights-positive);
+  background: var(--insights-positive-bg);
+  color: var(--insights-positive-text);
+}
+
+.attendant-dwell-chip--benchmark,
+.attendant-dwell-chip--benchmark .attendant-dwell-flag,
+.attendant-dwell-flag.attendant-dwell-chip--benchmark {
+  border-color: var(--insights-border-strong);
+  background: var(--insights-surface);
+  color: var(--insights-text);
+}
+
+.attendant-dwell-chip--long,
+.attendant-dwell-chip--long .attendant-dwell-flag,
+.attendant-dwell-flag.attendant-dwell-chip--long {
+  border-color: var(--insights-negative, #b42318);
+  background: var(--insights-negative-bg, #fef3f2);
+  color: var(--insights-negative-text, #912018);
+}
+
 @media (max-width: 640px) {
   .attendant-room-strip {
     grid-template-columns: repeat(3, minmax(0, 1fr));
